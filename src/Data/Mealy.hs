@@ -4,7 +4,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- | A 'Mealy' is a polymorphic statistic reimagined as a [mealy machine](https://en.wikipedia.org/wiki/Mealy_machine) processing and summarising data with some form of order (such as time-series data), where recent data is less relevant than old data.
+-- | A 'Mealy' is a polymorphic statistic reimagined as a state machine processing and summarising data with some form of order (such as time-series data), where recent data is less relevant than old data.
+--
+-- Note: the constructor is technically a Moore machine (output depends only on state, via 'extract'), not a Mealy machine (output would also depend on the current input). The library name follows the loose FP convention of calling any step-driven state machine a "Mealy" machine.
 module Data.Mealy
   ( -- * Types
     Mealy (..),

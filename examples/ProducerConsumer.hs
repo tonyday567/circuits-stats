@@ -8,11 +8,18 @@
 -- Both are Mealy machines; the symmetry is in the state.
 module ProducerConsumer where
 
+import Control.Category hiding (id)
 import Data.Mealy
+import Prelude hiding ((.))
+
+-- $setup
+-- >>> import Control.Category hiding (id)
+-- >>> import Data.Mealy
+-- >>> import Prelude hiding ((.))
 
 -- | Producer: unfold a list into a stream of values.
 --
--- >>> fold (producer [1,2,3]) [(),(),()]
+-- >>> scan (producer [1,2,3]) [(),(),()]
 -- [1,2,3]
 --
 -- State: remaining list.  `inject` loads it; `step` pops the head;

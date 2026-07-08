@@ -5,7 +5,7 @@
 -- | A cartesian 'Traced' instance for 'Mealy'.
 --
 -- This is the experiment from the discussion of Hasegawa-style shared
--- gradients: a 'Mealy' can be given a @Traced Mealy (,)@ instance by tying a
+-- gradients: a 'Mealy' can be given a @Traced (,) Mealy@ instance by tying a
 -- lazy knot at each step, analogous to the @MonadFix@ trace for @Kleisli m@.
 --
 -- The instance is lawful for morphisms that are productive / non-strict in the
@@ -24,14 +24,15 @@ module Data.Mealy.Trace
   )
 where
 
-import Circuit.Traced (Traced (..))
+import Circuit.Monoidal.Category (Monoidal (..))
+import Circuit.Trace (Traced (..))
 import Data.Bifunctor (second)
 import Data.Mealy (Mealy (..), scan, pattern M)
 import NumHask.Prelude hiding (id)
 import Prelude (id)
 
 -- $setup
--- >>> import Circuit.Traced (trace, untrace)
+-- >>> import Circuit.Trace (trace, untrace)
 -- >>> import Data.Mealy (Mealy (..), scan)
 
 -- | A stateless swap mealy, useful for checking the yanking law.
@@ -40,7 +41,12 @@ swapMealy = M swap (const swap) id
   where
     swap (x, y) = (y, x)
 
-instance Traced Mealy (,) where
+instance Monoidal (,) Mealy where
+  assoc = M id (\_ x -> x) (\(~(ab, c)) -> let ~(a, b) = ab in (a, (b, c)))
+  assoc' = M id (\_ x -> x) (\(a, ~(b, c)) -> ((a, b), c))
+  braid = M id (\_ x -> x) (\(a, ~(b, c)) -> (b, (a, c)))
+
+instance Traced (,) Mealy where
   trace (M inject step extract) =
     M
       (\b -> let s0 = inject (a0, b); a0 = fst (extract s0) in s0)

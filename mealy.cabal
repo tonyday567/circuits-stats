@@ -52,7 +52,7 @@ library
   build-depends:
     adjunctions >=4.0 && <4.5,
     base >=4.14 && <5,
-    circuits >=0.2 && <0.3,
+    circuits >=0.2 && <0.4,
     containers >=0.6 && <0.9,
     harpie >=0.1 && <0.3,
     harpie-numhask >=0.1 && <0.3,
@@ -72,4 +72,13 @@ library
     Data.Mealy.Quantiles
     Data.Mealy.Simulate
     Data.Mealy.Trace
+
+library producer-consumer-example
+  import: ghc-options-stanza
+  default-language: GHC2024
+  hs-source-dirs: examples
+  exposed-modules: ProducerConsumer
+  build-depends:
+    base >=4.14 && <5,
+    mealy,
 
