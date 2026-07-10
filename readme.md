@@ -12,6 +12,10 @@ A sum, for example, looks like `M id (+) id` where the first id is the initial i
 
 This library provides support for computing statistics (such as an average or a standard deviation) as current state within a mealy context.
 
+## Naming note
+
+In the strict automata-theory sense, the type `Mealy a b` here is a **Moore machine**: the output `extract :: s -> b` depends only on the current state, not on the current input. A categorical Mealy machine would have output depend on both state and input (`s -> a -> b`). The library keeps the name `Mealy` because the API emphasizes the streaming, input-driven transition `s -> a -> s`, but the distinction is worth noting when connecting this to polynomial functors or circuits-style interfaces.
+
 ## Usage
 
 Usage is to supply a decay function representing the relative weights of recent values versus older ones, in the manner of exponentially-weighted averages. The library attempts to be polymorphic in the statistic which can be combined in applicative style.
