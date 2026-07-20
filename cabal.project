@@ -1,25 +1,10 @@
 packages:
   mealy.cabal
-
-source-repository-package
-  type: git
-  location: https://github.com/tonyday567/numhask.git
-  branch: v0.14
-
-source-repository-package
-  type: git
-  location: https://github.com/tonyday567/numhask-diff.git
-  branch: main
-
-source-repository-package
-  type: git
-  location: https://github.com/tonyday567/harpie-numhask.git
-  branch: feature/numhask-0.14
-
-source-repository-package
-  type: git
-  location: https://github.com/tonyday567/circuits.git
-  branch: main
+  ../circuits/circuits.cabal
+  ../harpie/harpie.cabal
+  ../harpie-numhask/harpie-numhask.cabal
+  ../numhask/numhask.cabal
+  ../numhask-diff/numhask-diff.cabal
 
 constraints:
   circuits >= 0.2

@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports -Wno-pattern-namespace-specifier #-}
 
 -- | A cartesian 'Traced' instance for 'Mealy'.
@@ -24,27 +25,40 @@ module Data.Mealy.Trace
   )
 where
 
-import Circuit.Monoidal.Category (Monoidal (..))
-import Circuit.Trace (Traced (..))
+import Circuit.Channel (Channel (..), Strength (..), Traced (..))
+import Circuit.Category (Ob)
+import Circuit.Category qualified as CC
+import Control.Category qualified as Cat
 import Data.Bifunctor (second)
 import Data.Mealy (Mealy (..), scan, pattern M)
-import NumHask.Prelude hiding (id)
-import Prelude (id)
+import NumHask.Prelude hiding (id, (.))
 
 -- $setup
--- >>> import Circuit.Trace (trace, untrace)
+-- >>> import Circuit.Channel (trace)
 -- >>> import Data.Mealy (Mealy (..), scan)
 
 -- | A stateless swap mealy, useful for checking the yanking law.
 swapMealy :: Mealy (a, b) (b, a)
-swapMealy = M swap (const swap) id
+swapMealy = M swap (const swap) Cat.id
   where
     swap (x, y) = (y, x)
 
-instance Monoidal (,) Mealy where
-  assoc = M id (\_ x -> x) (\(~(ab, c)) -> let ~(a, b) = ab in (a, (b, c)))
-  assoc' = M id (\_ x -> x) (\(a, ~(b, c)) -> ((a, b), c))
-  braid = M id (\_ x -> x) (\(a, ~(b, c)) -> (b, (a, c)))
+instance CC.Category Mealy where
+  type Ob Mealy a = ()
+  id = Cat.id
+  (.) = (Cat..)
+
+instance Channel (,) Mealy where
+  assoc = M Cat.id (\_ x -> x) (\(~((a, b), c)) -> (a, (b, c)))
+  assoc' = M Cat.id (\_ x -> x) (\(a, ~(b, c)) -> ((a, b), c))
+  slide = M Cat.id (\_ x -> x) (\(a, ~(b, c)) -> (b, (a, c)))
+
+instance Strength (,) Mealy where
+  strength (M inject step extract) =
+    M
+      (\(a, b) -> (a, inject b))
+      (\(_a, s) (a', b) -> (a', step s b))
+      (\(a, s) -> (a, extract s))
 
 instance Traced (,) Mealy where
   trace (M inject step extract) =
@@ -54,10 +68,4 @@ instance Traced (,) Mealy where
           let (s', _a) = fix (\ ~(s'', a') -> (step s (a', b), fst (extract s'')))
            in s'
       )
-      (snd . extract)
-
-  untrace (M inject step extract) =
-    M
-      (second inject)
-      (\(_a0, s) (a, b) -> (a, step s b))
-      (second extract)
+      (snd Cat.. extract)

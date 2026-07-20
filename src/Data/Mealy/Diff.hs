@@ -48,6 +48,7 @@ where
 
 import Data.List (length)
 import Data.Mealy (Averager (..), Mealy, fold, ma, online, scan, sqma, std, pattern A)
+import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
 import NumHask.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
@@ -70,7 +71,7 @@ newtype GradInputs a = GradInputs
 -- | Componentwise maximum shape, padding missing dimensions with the longer
 -- side.
 broadcastShape :: Array a -> Array a -> [Int]
-broadcastShape xs ys = go (HA.shape xs) (HA.shape ys)
+broadcastShape xs ys = go (VU.toList (HA.shape xs)) (VU.toList (HA.shape ys))
   where
     go [] bs = bs
     go as [] = as

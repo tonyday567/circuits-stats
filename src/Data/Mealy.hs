@@ -67,7 +67,8 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import GHC.TypeLits
-import Harpie.Fixed qualified as F
+import Data.Vector (Vector)
+import Harpie.Fixed.Generic qualified as F
 import Harpie.NumHask qualified as N
 import Harpie.Shape qualified as S
 import NumHask.Prelude hiding (asum, diff, fold, id, last, (.))
@@ -399,9 +400,9 @@ reg1 :: (ExpField a) => Mealy a a -> Mealy (a, a) (a, a)
 reg1 m = (,) <$> alpha1 m <*> beta1 m
 
 data RegressionState (n :: Nat) a = RegressionState
-  { _xx :: F.Array '[n, n] a,
-    _x :: F.Array '[n] a,
-    _xy :: F.Array '[n] a,
+  { _xx :: F.Array Vector '[n, n] a,
+    _x :: F.Array Vector '[n] a,
+    _xy :: F.Array Vector '[n] a,
     _y :: a
   }
   deriving (Functor)
@@ -424,36 +425,36 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
-beta :: (ExpField a, KnownNat n, Eq a) => a -> Mealy (F.Array '[n] a, a) (F.Array '[n] a)
+beta :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
 beta r = M inject step extract
   where
-    -- extract :: Averager (RegressionState n a) a -> (F.Array '[n] a)
+    -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
     extract (A (RegressionState xx x xy y) c) =
       (\a b -> recip a `N.mult` b)
-        ((one / c) *| (xx - F.expand (*) x x))
-        ((xy - (y *| x)) |* (one / c))
+        ((xx - F.expand (*) x x) |* (one / c))
+        ((xy - (x |* y)) |* (one / c))
     step x (xs, y) = rsOnline r x (inject (xs, y))
-    -- inject :: (F.Array '[n] a, a) -> Averager (RegressionState n a) a
+    -- inject :: (F.Array Vector '[n] a, a) -> Averager (RegressionState n a) a
     inject (xs, y) =
-      A (RegressionState (F.expand (*) xs xs) xs (y *| xs) y) one
+      A (RegressionState (F.expand (*) xs xs) xs (xs |* y) y) one
 {-# INLINEABLE beta #-}
 
 rsOnline :: (Field a, KnownNat n) => a -> Averager (RegressionState n a) a -> Averager (RegressionState n a) a -> Averager (RegressionState n a) a
 rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') c') =
-  A (RegressionState (liftR2 d xx xx') (liftR2 d x x') (liftR2 d xy xy') (d y y')) (d c c')
+  A (RegressionState (F.zipWith d xx xx') (F.zipWith d x x') (F.zipWith d xy xy') (d y y')) (d c c')
   where
     d s s' = r * s + s'
 
 -- | alpha in a multiple regression
-alpha :: (ExpField a, KnownNat n, Eq a) => a -> Mealy (F.Array '[n] a, a) a
-alpha r = (\xs b y -> y - sum (liftR2 (*) b xs)) <$> lmap fst (arrayify $ ma r) <*> beta r <*> lmap snd (ma r)
+alpha :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) a
+alpha r = (\xs b y -> y - sum (F.zipWith (*) b xs)) <$> lmap fst (arrayify $ ma r) <*> beta r <*> lmap snd (ma r)
 {-# INLINEABLE alpha #-}
 
-arrayify :: (S.KnownNats s) => Mealy a b -> Mealy (F.Array s a) (F.Array s b)
+arrayify :: (S.KnownNats s) => Mealy a b -> Mealy (F.Array Vector s a) (F.Array Vector s b)
 arrayify (M sExtract sStep sInject) = M extract step inject
   where
     extract = fmap sExtract
-    step = liftR2 sStep
+    step = F.zipWith sStep
     inject = fmap sInject
 
 -- | multiple regression
@@ -462,7 +463,7 @@ arrayify (M sExtract sStep sInject) = M extract step inject
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
-reg :: (ExpField a, KnownNat n, Eq a) => a -> Mealy (F.Array '[n] a, a) (F.Array '[n] a, a)
+reg :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = (,) <$> beta r <*> alpha r
 {-# INLINEABLE reg #-}
 
