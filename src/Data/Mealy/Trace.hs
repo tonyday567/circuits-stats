@@ -26,7 +26,7 @@ module Data.Mealy.Trace
 where
 
 import Circuit.Channel (Channel (..), Strength (..), Traced (..))
-import Circuit.Category (Ob)
+import Circuit.Category (Ob, ObDict (..))
 import Circuit.Category qualified as CC
 import Control.Category qualified as Cat
 import Data.Bifunctor (second)
@@ -52,6 +52,8 @@ instance Channel (,) Mealy where
   assoc = M Cat.id (\_ x -> x) (\(~((a, b), c)) -> (a, (b, c)))
   assoc' = M Cat.id (\_ x -> x) (\(a, ~(b, c)) -> ((a, b), c))
   slide = M Cat.id (\_ x -> x) (\(a, ~(b, c)) -> (b, (a, c)))
+  withTensorOb ObDict ObDict x = x
+  {-# INLINE withTensorOb #-}
 
 instance Strength (,) Mealy where
   strength (M inject step extract) =
@@ -59,6 +61,8 @@ instance Strength (,) Mealy where
       (\(a, b) -> (a, inject b))
       (\(_a, s) (a', b) -> (a', step s b))
       (\(a, s) -> (a, extract s))
+  withStrengthOb ObDict ObDict ObDict x = x
+  {-# INLINE withStrengthOb #-}
 
 instance Traced (,) Mealy where
   trace (M inject step extract) =
