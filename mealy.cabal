@@ -73,12 +73,3 @@ library
     Data.Mealy.Simulate
     Data.Mealy.Trace
 
-library producer-consumer-example
-  import: ghc-options-stanza
-  default-language: GHC2024
-  hs-source-dirs: examples
-  exposed-modules: ProducerConsumer
-  build-depends:
-    base >=4.14 && <5,
-    mealy,
-
