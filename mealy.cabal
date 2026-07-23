@@ -69,6 +69,7 @@ library
   exposed-modules:
     Data.Mealy
     Data.Mealy.Diff
+    Data.Mealy.ODE
     Data.Mealy.Quantiles
     Data.Mealy.Simulate
     Data.Mealy.Trace
