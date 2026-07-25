@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RebindableSyntax #-}
 
--- | Mealy quantile statistics.
-module Data.Mealy.Quantiles
+-- | Process quantile statistics.
+module Process.Stats.Quantiles
   ( median,
     quantiles,
     digitize,
@@ -16,7 +16,7 @@ module Data.Mealy.Quantiles
 where
 
 import Control.Monad.ST
-import Data.Mealy
+import Process.Stats
 import Data.Ord
 import Data.TDigest hiding (median)
 import Data.TDigest.Internal
@@ -35,9 +35,9 @@ data OnlineTDigest = OnlineTDigest
 emptyOnlineTDigest :: Double -> OnlineTDigest
 emptyOnlineTDigest = OnlineTDigest (emptyTDigest :: TDigest n) 0
 
--- | Mealy quantiles based on the tdigest library
-quantiles :: Double -> [Double] -> Mealy Double [Double]
-quantiles r qs = M inject step extract
+-- | Process quantiles based on the tdigest library
+quantiles :: Double -> [Double] -> Process Double [Double]
+quantiles r qs = Process inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -45,11 +45,11 @@ quantiles r qs = M inject step extract
       where
         (OnlineTDigest t _ _) = onlineForceCompress x
 
--- | Mealy median using 'tdigest'
+-- | Process median using 'tdigest'
 --
 -- The tdigest algorithm works best at extremes and can be unreliable in the centre.
-median :: Double -> Mealy Double Double
-median r = M inject step extract
+median :: Double -> Process Double Double
+median r = Process inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -93,14 +93,14 @@ onlineForceCompress (OnlineTDigest t n r) = OnlineTDigest t' 0 r
         VHeap.sortBy (comparing snd) v
         VU.unsafeFreeze v
 
--- | A mealy that computes the running quantile bucket. For example,
+-- | A process that computes the running quantile bucket. For example,
 -- in a scan, @digitize 0.9 [0.5]@ returns:
 --
--- * 0 if the current value is less than the current mealy median.
+-- * 0 if the current value is less than the current process median.
 --
--- * 1 if the current value is greater than the current mealy median.
-digitize :: Double -> [Double] -> Mealy Double Int
-digitize r qs = M inject step extract
+-- * 1 if the current value is greater than the current process median.
+digitize :: Double -> [Double] -> Process Double Int
+digitize r qs = Process inject step extract
   where
     step (x, _) a = (onlineInsert a x, a)
     inject a = (onlineInsert a (emptyOnlineTDigest r), a)
@@ -109,7 +109,7 @@ digitize r qs = M inject step extract
         qs' = fromMaybe (0 / 0) . (`quantile` t) <$> qs
         (OnlineTDigest t _ _) = onlineForceCompress x
         bucket' xs l' =
-          fold (M id (+) id) $
+          fold (Process id (+) id) $
             ( \x' ->
                 if x' > l'
                   then 0
@@ -118,6 +118,6 @@ digitize r qs = M inject step extract
               <$> xs
 
 -- | transform an input to a [0,1] signal, via digitalization.
-signalize :: Double -> [Double] -> Mealy Double Double
+signalize :: Double -> [Double] -> Process Double Double
 signalize r qs' =
   (\x -> fromIntegral x / fromIntegral (length qs' + 1)) <$> digitize r qs'

@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier -Wno-orphans #-}
 
--- | Ordinary differential equation integrators as streaming 'Mealy' machines.
+-- | Ordinary differential equation integrators as streaming 'Process' machines.
 --
 -- A vector field is represented as a 'Diff' so the same field can be reused
 -- in differentiable contexts; the integrators themselves use only the forward
@@ -12,7 +12,7 @@
 -- The step size is kept separate from the state so that vector-valued states
 -- (for example 'NumHask.Algebra.Metric.EuclideanPair') can be stepped with a
 -- scalar step size.
-module Data.Mealy.ODE
+module Process.Stats.ODE
   ( -- * Vector fields
     vectorField,
 
@@ -24,14 +24,14 @@ module Data.Mealy.ODE
     euler,
     rk4,
 
-    -- * Mealy machines
+    -- * Process machines
     eulerMealy,
     rk4Mealy,
   )
 where
 
 import Data.List (scanl')
-import Data.Mealy (Mealy, pattern M)
+import Process.Stats (Process (..))
 import NumHask.Diff (Diff, runDiff, pattern Diff)
 import NumHask.Prelude
 import Prelude ()
@@ -41,7 +41,7 @@ import Prelude ()
 -- >>> :m -Prelude
 -- >>> :set -XRebindableSyntax
 -- >>> import NumHask.Prelude
--- >>> import Data.Mealy.ODE
+-- >>> import Process.Stats.ODE
 -- >>> import NumHask.Algebra.Metric (EuclideanPair (..))
 -- >>> import NumHask.Diff (Diff, runDiff)
 
@@ -132,7 +132,7 @@ rk4 ::
   [s]
 rk4 f y0 dts = scanl' (\y h -> rk4Step f y h) y0 dts
 
--- | A 'Mealy' machine that performs Euler integration.
+-- | A 'Process' machine that performs Euler integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
@@ -140,10 +140,10 @@ eulerMealy ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
   Diff s s ->
   s ->
-  Mealy h s
-eulerMealy f y0 = M (const y0) (\y h -> eulerStep f y h) id
+  Process h s
+eulerMealy f y0 = Process (const y0) (\y h -> eulerStep f y h) id
 
--- | A 'Mealy' machine that performs RK4 integration.
+-- | A 'Process' machine that performs RK4 integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
@@ -151,5 +151,5 @@ rk4Mealy ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
   Diff s s ->
   s ->
-  Mealy h s
-rk4Mealy f y0 = M (const y0) (\y h -> rk4Step f y h) id
+  Process h s
+rk4Mealy f y0 = Process (const y0) (\y h -> rk4Step f y h) id

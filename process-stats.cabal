@@ -1,22 +1,25 @@
 cabal-version: 3.0
-name: mealy
-version: 0.5.2.0
+name: process-stats
+version: 0.1.0.0
 license: BSD-3-Clause
 license-file: LICENSE
-copyright: Tony Day (c) 2013
-category: algorithm
+copyright: Tony Day (c) 2025-2026
+category: control
 author: Tony Day
 maintainer: tonyday567@gmail.com
-homepage: https://github.com/tonyday567/mealy#readme
-bug-reports: https://github.com/tonyday567/mealy/issues
-synopsis: Mealy machines for processing time-series and ordered data.
+homepage: https://github.com/tonyday567/process-stats#readme
+bug-reports: https://github.com/tonyday567/process-stats/issues
+synopsis: Statistical processes on top of circuits.
 description:
-  @mealy@ reimagines statistics as a [mealy machine](https://en.wikipedia.org/wiki/Mealy_machine) processing data with some form of order such as time-series data. The 'Mealy', with the help of a decay function specifying the relative weights of recent values versus older value, can be treated as a compression or summary of the data stream into 'current state.'
-  Mealies are highly polymorphic, situated at a busy crossroad of theory and practice, and lend themselves to ergonmic, compact and realistic representations of a wide range of online phenomena.
+  @process-stats@ provides streaming statistics and other state-machine
+  specialisations built on the 'Circuit.Process' carrier from @circuits@.
+  The arrow itself lives in @circuits@; this package is the box library:
+  moving averages, standard deviations, quantiles, ODEs, differentiable
+  processes, and simulation helpers.
 
   == Usage
 
-  >>> import Mealy
+  >>> import Process.Stats
 
   >>> fold ((,) <$> ma 0.9 <*> std 0.9) [1..100]
   (91.00265621044142,9.472822805289121)
@@ -33,7 +36,7 @@ extra-doc-files:
 
 source-repository head
   type: git
-  location: https://github.com/tonyday567/mealy
+  location: https://github.com/tonyday567/process-stats
 
 common ghc-options-stanza
   ghc-options:
@@ -67,10 +70,9 @@ library
     vector-algorithms >=0.8.0 && <0.10,
 
   exposed-modules:
-    Data.Mealy
-    Data.Mealy.Diff
-    Data.Mealy.ODE
-    Data.Mealy.Quantiles
-    Data.Mealy.Simulate
-    Data.Mealy.Trace
+    Process.Stats
+    Process.Stats.Diff
+    Process.Stats.ODE
+    Process.Stats.Quantiles
+    Process.Stats.Simulate
 

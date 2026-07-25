@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- | simulation to support testing of Mealy's using mwc-probability
-module Data.Mealy.Simulate
+-- | simulation to support testing of Process's using mwc-probability
+module Process.Stats.Simulate
   ( rvs,
     rvsp,
     create,
@@ -14,13 +14,13 @@ import System.Random.MWC.Probability
 
 -- $setup
 -- >>> :set -XFlexibleContexts
--- >>> import Data.Mealy
+-- >>> import Process.Stats
 -- >>> gen <- create
 
 -- | rvs creates a list of standard normal random variates.
 --
--- >>> import Data.Mealy
--- >>> import Data.Mealy.Simulate
+-- >>> import Process.Stats
+-- >>> import Process.Stats.Simulate
 -- >>> gen <- create
 -- >>> rvs gen 3
 -- [1.8005943761746166e-2,0.36444481359059255,-1.2939898115295387]

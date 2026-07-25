@@ -4,14 +4,16 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- | A 'Mealy' is a polymorphic statistic reimagined as a state machine processing and summarising data with some form of order (such as time-series data), where recent data is less relevant than old data.
+-- | Streaming statistics and state-machine specialisations built on
+-- 'Circuit.Process.Process'.
 --
--- Note: the constructor is technically a Moore machine (output depends only on state, via 'extract'), not a Mealy machine (output would also depend on the current input). The library name follows the loose FP convention of calling any step-driven state machine a "Mealy" machine.
-module Data.Mealy
-  ( -- * Types
-    Mealy (..),
+-- The 'Process' carrier itself lives in "Circuit.Process"; this module is the
+-- box library: moving averages, standard deviations, regression, quantiles,
+-- delays, and related streaming combinators.
+module Process.Stats
+  ( -- * Process re-export
+    Process (..),
     dipure,
-    pattern M,
     scan,
     fold,
     Averager (..),
@@ -56,13 +58,12 @@ module Data.Mealy
   )
 where
 
-import Control.Category
+import Circuit.Category (id)
+import Circuit.Process (Process (..), scan)
 import Control.Exception
-import Data.Bifunctor
-import Data.Functor.Rep
-import Data.List (scanl')
+import Data.List (foldl')
 import Data.Map qualified as Map
-import Data.Profunctor
+import Data.Profunctor (lmap)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
@@ -78,7 +79,7 @@ import NumHask.Prelude hiding (asum, diff, fold, id, last, (.))
 -- >>> :set -XDataKinds
 -- >>> import Control.Category ((>>>))
 -- >>> import Data.List
--- >>> import Data.Mealy.Simulate
+-- >>> import Process.Stats.Simulate
 -- >>> import Harpie.Fixed qualified as F
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000
@@ -87,114 +88,36 @@ import NumHask.Prelude hiding (asum, diff, fold, id, last, (.))
 -- >>> xsp <- rvsp g 10000 0.8
 
 -- $example-set
--- The doctest examples are composed from some random series generated with Data.Mealy.Simulate.
+-- The doctest examples are composed from some random series generated with Process.Stats.Simulate.
 --
 -- - xs0, xs1 & xs2 are samples from N(0,1)
 --
 -- - xsp is a pair of N(0,1)s with a correlation of 0.8
 --
 -- >>> :set -XDataKinds
--- >>> import Data.Mealy.Simulate
+-- >>> import Process.Stats.Simulate
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000
 -- >>> xs1 <- rvs g 10000
 -- >>> xs2 <- rvs g 10000
 -- >>> xsp <- rvsp g 10000 0.8
 
-newtype MealyError = MealyError {mealyErrorMessage :: Text}
+newtype ProcessStatsError = ProcessStatsError {processStatsErrorMessage :: Text}
   deriving (Show)
 
-instance Exception MealyError
+instance Exception ProcessStatsError
 
--- | A 'Mealy' a b is a triple of functions
+-- | Create a 'Process' from a (pure) binary operation.
+dipure :: (a -> a -> a) -> Process a a
+dipure f = Process id f id
+
+-- | Fold a list through a 'Process'.
 --
--- * (a -> s) __inject__ Convert an input into an internal state type.
--- * (s -> a -> s) __step__ Update state given prior state and (new) input.
--- * (s -> b) __extract__ Convert state to the output type.
---
--- By adopting this order, a sum, for example, looks like:
---
--- > M id (+) id
---
--- where the first id is the initial injection to a contravariant position, and the second id is the covariant extraction.
---
--- __inject__ kicks off state on the initial element of the Foldable, but is otherwise  independent of __step__.
---
--- > scan (M i s e) (x : xs) = e <$> scanl' s (i x) xs
-data Mealy a b = forall s. Mealy (a -> s) (s -> a -> s) (s -> b)
-
--- | Strict Pair
-data Pair' a b = Pair' !a !b deriving (Eq, Ord, Show, Read)
-
-instance (Semigroup a, Semigroup b) => Semigroup (Pair' a b) where
-  Pair' a b <> Pair' c d = Pair' (a <> c) (b <> d)
-  {-# INLINE (<>) #-}
-
-instance (Monoid a, Monoid b) => Monoid (Pair' a b) where
-  mempty = Pair' mempty mempty
-
-instance Functor (Mealy a) where
-  fmap f (Mealy z h k) = Mealy z h (f . k)
-
-instance Applicative (Mealy a) where
-  pure x = Mealy (const ()) (\() _ -> ()) (\() -> x)
-  Mealy zf hf kf <*> Mealy za ha ka =
-    Mealy
-      (\a -> Pair' (zf a) (za a))
-      (\(Pair' x y) a -> Pair' (hf x a) (ha y a))
-      (\(Pair' x y) -> kf x (ka y))
-
-instance Category Mealy where
-  id = Mealy id (\_ a -> a) id
-  Mealy z h k . Mealy z' h' k' = Mealy z'' h'' (\(Pair' b _) -> k b)
-    where
-      z'' a = Pair' (z (k' b)) b where b = z' a
-      h'' (Pair' c d) a = Pair' (h c (k' d')) d' where d' = h' d a
-
-instance Profunctor Mealy where
-  dimap f g (Mealy z h k) = Mealy (z . f) (\a -> h a . f) (g . k)
-  lmap f (Mealy z h k) = Mealy (z . f) (\a -> h a . f) k
-  rmap g (Mealy z h k) = Mealy z h (g . k)
-
-instance Strong Mealy where
-  first' (M i s e) = M (first i) (\(cl, _) (al, ar) -> (s cl al, ar)) (first e)
-
-instance Costrong Mealy where
-  unfirst (M inject step extract) =
-    M
-      (\a -> let s0 = inject (a, c0); c0 = snd (extract s0) in s0)
-      (\s a -> let c = snd (extract s); s' = step s (a, c) in s')
-      (fst . extract)
-
--- The right type for Choice would be something like:
---
--- left' :: p a b -> p (Either a c) (These b c)
-
--- | Convenience pattern for a 'Mealy'.
---
--- @M extract step inject@
-pattern M :: (a -> c) -> (c -> a -> c) -> (c -> b) -> Mealy a b
-pattern M i s e = Mealy i s e
-
-{-# COMPLETE M #-}
-
--- | Create a Mealy from a (pure) function
-dipure :: (a -> a -> a) -> Mealy a a
-dipure f = M id f id
-
--- | Fold a list through a 'Mealy'.
---
--- > cosieve == fold
-fold :: Mealy a b -> [a] -> b
-fold _ [] = throw (MealyError "empty list")
-fold (M i s e) (x : xs) = e $ foldl' s (i x) xs
-
--- | Run a list through a 'Mealy' and return a list of values for every step
---
--- > length (scan _ xs) == length xs
-scan :: Mealy a b -> [a] -> [b]
-scan _ [] = []
-scan (M i s e) (x : xs) = fromList (e <$> scanl' s (i x) xs)
+-- Throws a 'ProcessStatsError' on an empty list. For a total variant see
+-- 'Circuit.Process.fold'.
+fold :: Process a b -> [a] -> b
+fold _ [] = throw (ProcessStatsError "empty list")
+fold (Process i s e) (x : xs) = e $ foldl' s (i x) xs
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
@@ -239,7 +162,7 @@ av (A s c) = s / c
 av_ :: (Eq a, Additive a, Divisive a) => Averager a a -> a -> a
 av_ (A s c) def = bool def (s / c) (c == zero)
 
--- | @online f g@ is a 'Mealy' where f is a transformation of the data and
+-- | @online f g@ is a 'Process' where f is a transformation of the data and
 -- g is a decay function (usually convergent to zero) applied at each step.
 --
 -- > online id id == av
@@ -258,8 +181,8 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 -- Applicative-style exponentially-weighted standard deviation computation:
 --
 -- > std r = (\s ss -> sqrt (ss - s ** 2)) <$> ma r <*> sqma r
-online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Mealy a b
-online f g = M intract step av
+online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Process a b
+online f g = Process intract step av
   where
     intract a = A (f a) one
     step (A s c) a =
@@ -276,7 +199,7 @@ online f g = M intract step av
 --
 -- >>> fold (ma 0.99) xs0
 -- 9.713356299018187e-2
-ma :: (Divisive a, Additive a) => a -> Mealy a a
+ma :: (Divisive a, Additive a) => a -> Process a a
 ma r = online id (* r)
 {-# INLINEABLE ma #-}
 
@@ -284,20 +207,20 @@ ma r = online id (* r)
 --
 -- >>> fold (absma 1) xs0
 -- 0.8075705557429647
-absma :: (Divisive a, Absolute a) => a -> Mealy a a
+absma :: (Divisive a, Absolute a) => a -> Process a a
 absma r = online abs (* r)
 {-# INLINEABLE absma #-}
 
 -- | average square
 --
 -- > fold (ma r) . fmap (**2) == fold (sqma r)
-sqma :: (Divisive a, Additive a) => a -> Mealy a a
+sqma :: (Divisive a, Additive a) => a -> Process a a
 sqma r = online (\x -> x * x) (* r)
 {-# INLINEABLE sqma #-}
 
 -- | standard deviation
 --
--- The construction of standard deviation, using the Applicative instance of a 'Mealy':
+-- The construction of standard deviation, using the Applicative instance of a 'Process':
 --
 -- > (\s ss -> sqrt (ss - s ** (one+one))) <$> ma r <*> sqma r
 --
@@ -314,7 +237,7 @@ sqma r = online (\x -> x * x) (* r)
 --
 -- >>> fold (std 1) xs0
 -- 1.0126438036262801
-std :: (ExpField a) => a -> Mealy a a
+std :: (ExpField a) => a -> Process a a
 std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
 {-# INLINEABLE std #-}
 
@@ -322,7 +245,7 @@ std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
 --
 -- >>> fold (cov (ma 1)) xsp
 -- 0.7818936662586868
-cov :: (Field a) => Mealy a a -> Mealy (a, a) a
+cov :: (Field a) => Process a a -> Process (a, a) a
 cov m =
   (\xy x' y' -> xy - x' * y') <$> lmap (uncurry (*)) m <*> lmap fst m <*> lmap snd m
 {-# INLINEABLE cov #-}
@@ -331,7 +254,7 @@ cov m =
 --
 -- >>> fold (corrGauss 1) xsp
 -- 0.7978347126677433
-corrGauss :: (ExpField a) => a -> Mealy (a, a) a
+corrGauss :: (ExpField a) => a -> Process (a, a) a
 corrGauss r =
   (\cov' stdx stdy -> cov' / (stdx * stdy))
     <$> cov (ma r)
@@ -345,7 +268,7 @@ corrGauss r =
 -- 0.7978347126677433
 --
 -- > corr (ma r) (std r) == corrGauss r
-corr :: (ExpField a) => Mealy a a -> Mealy a a -> Mealy (a, a) a
+corr :: (ExpField a) => Process a a -> Process a a -> Process (a, a) a
 corr central deviation =
   (\cov' stdx stdy -> cov' / (stdx * stdy))
     <$> cov central
@@ -355,7 +278,7 @@ corr central deviation =
 
 -- | The beta in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
 --
--- This is a generalisation of the classical regression formula, where averages are replaced by 'Mealy' statistics.
+-- This is a generalisation of the classical regression formula, where averages are replaced by 'Process' statistics.
 --
 -- \[
 -- \begin{align}
@@ -367,7 +290,7 @@ corr central deviation =
 --
 -- >>> fold (beta1 (ma 1)) $ zipWith (\x y -> (y, x + y)) xs0 xs1
 -- 0.999747321294513
-beta1 :: (ExpField a) => Mealy a a -> Mealy (a, a) a
+beta1 :: (ExpField a) => Process a a -> Process (a, a) a
 beta1 m =
   (\xy x' y' x2 -> (xy - x' * y') / (x2 - x' * x'))
     <$> lmap (uncurry (*)) m
@@ -388,7 +311,7 @@ beta1 m =
 --
 -- >>> fold (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- 1.3680496627365146e-2
-alpha1 :: (ExpField a) => Mealy a a -> Mealy (a, a) a
+alpha1 :: (ExpField a) => Process a a -> Process (a, a) a
 alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
 {-# INLINEABLE alpha1 #-}
 
@@ -396,7 +319,7 @@ alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
 --
 -- >>> fold (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- (1.3680496627365146e-2,0.4997473212944953)
-reg1 :: (ExpField a) => Mealy a a -> Mealy (a, a) (a, a)
+reg1 :: (ExpField a) => Process a a -> Process (a, a) (a, a)
 reg1 m = (,) <$> alpha1 m <*> beta1 m
 
 data RegressionState (n :: Nat) a = RegressionState
@@ -425,8 +348,8 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
-beta :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
-beta r = M inject step extract
+beta :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
+beta r = Process inject step extract
   where
     -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
     extract (A (RegressionState xx x xy y) c) =
@@ -446,12 +369,12 @@ rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') 
     d s s' = r * s + s'
 
 -- | alpha in a multiple regression
-alpha :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) a
+alpha :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) a
 alpha r = (\xs b y -> y - sum (F.zipWith (*) b xs)) <$> lmap fst (arrayify $ ma r) <*> beta r <*> lmap snd (ma r)
 {-# INLINEABLE alpha #-}
 
-arrayify :: (S.KnownNats s) => Mealy a b -> Mealy (F.Array Vector s a) (F.Array Vector s b)
-arrayify (M sExtract sStep sInject) = M extract step inject
+arrayify :: (S.KnownNats s) => Process a b -> Process (F.Array Vector s a) (F.Array Vector s b)
+arrayify (Process sExtract sStep sInject) = Process extract step inject
   where
     extract = fmap sExtract
     step = F.zipWith sStep
@@ -463,29 +386,29 @@ arrayify (M sExtract sStep sInject) = M extract step inject
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
-reg :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
+reg :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = (,) <$> beta r <*> alpha r
 {-# INLINEABLE reg #-}
 
 -- | accumulated sum
-asum :: (Additive a) => Mealy a a
-asum = M id (+) id
+asum :: (Additive a) => Process a a
+asum = Process id (+) id
 
--- | constant Mealy
-aconst :: b -> Mealy a b
-aconst b = M (const ()) (\_ _ -> ()) (const b)
+-- | constant Process
+aconst :: b -> Process a b
+aconst b = Process (const ()) (\_ _ -> ()) (const b)
 
 -- | most recent value
-last :: Mealy a a
-last = M id (\_ a -> a) id
+last :: Process a a
+last = Process id (\_ a -> a) id
 
 -- | most recent value if it exists, previous value otherwise.
-maybeLast :: a -> Mealy (Maybe a) a
-maybeLast def = M (fromMaybe def) fromMaybe id
+maybeLast :: a -> Process (Maybe a) a
+maybeLast def = Process (fromMaybe def) fromMaybe id
 
 -- | delay input values by 1
-delay1 :: a -> Mealy a a
-delay1 x0 = M (x0,) (\(_, x) a -> (x, a)) fst
+delay1 :: a -> Process a a
+delay1 x0 = Process (x0,) (\(_, x) a -> (x, a)) fst
 
 -- | delays values by n steps
 --
@@ -504,45 +427,45 @@ delay1 x0 = M (x0,) (\(_, x) a -> (x, a)) fst
 delay ::
   -- | initial statistical values, delay equals length
   [a] ->
-  Mealy a a
-delay x0 = M inject step extract
+  Process a a
+delay x0 = Process inject step extract
   where
     inject a = Seq.fromList x0 Seq.|> a
     extract :: Seq a -> a
-    extract Seq.Empty = throw (MealyError "empty seq")
+    extract Seq.Empty = throw (ProcessStatsError "empty seq")
     extract (x Seq.:<| _) = x
     step :: Seq a -> a -> Seq a
-    step Seq.Empty _ = throw (MealyError "empty seq")
+    step Seq.Empty _ = throw (ProcessStatsError "empty seq")
     step (_ Seq.:<| xs) a = xs Seq.|> a
 
 -- | a moving window of a's, most recent at the front of the sequence
-window :: Int -> Mealy a (Seq.Seq a)
-window n = M Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
+window :: Int -> Process a (Seq.Seq a)
+window n = Process Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 {-# INLINEABLE window #-}
 
 -- | binomial operator applied to last and this value
-diff :: (a -> a -> b) -> Mealy a b
+diff :: (a -> a -> b) -> Process a b
 diff f = f <$> id <*> delay1 undefined
 
 -- | generalised diff function.
-gdiff :: (a -> b) -> (a -> a -> b) -> Mealy a b
-gdiff d0 d = M (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
+gdiff :: (a -> b) -> (a -> a -> b) -> Process a b
+gdiff d0 d = Process (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
 
 -- | Unchanged since last time.
-same :: (Eq b) => (a -> b) -> Mealy a Bool
-same b = M (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
+same :: (Eq b) => (a -> b) -> Process a Bool
+same b = Process (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
 
 -- | Count observed values
-countM :: (Ord a) => Mealy a (Map.Map a Int)
-countM = M (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
+countM :: (Ord a) => Process a (Map.Map a Int)
+countM = Process (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
 
 -- | Sum values of a key-value pair.
-sumM :: (Ord a, Additive b) => Mealy (a, b) (Map.Map a b)
-sumM = M (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
+sumM :: (Ord a, Additive b) => Process (a, b) (Map.Map a b)
+sumM = Process (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
 
--- | Convert a Mealy to a Mealy operating on lists.
-listify :: Mealy a b -> Mealy [a] [b]
-listify (M sExtract sStep sInject) = M extract step inject
+-- | Convert a Process to a Process operating on lists.
+listify :: Process a b -> Process [a] [b]
+listify (Process sExtract sStep sInject) = Process extract step inject
   where
     extract = fmap sExtract
     step = zipWith sStep
@@ -556,10 +479,10 @@ data Medianer a b = Medianer
     medianEst :: a
   }
 
--- | onlineL1' takes a function and turns it into a `Mealy` where the step is an incremental update of an (isomorphic) median statistic.
+-- | onlineL1' takes a function and turns it into a `Process` where the step is an incremental update of an (isomorphic) median statistic.
 onlineL1 ::
-  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Mealy a b
-onlineL1 i d f g = snd <$> M inject step extract
+  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Process a b
+onlineL1 i d f g = snd <$> Process inject step extract
   where
     inject a = let s = abs (f a) in Medianer s one (i * s)
     step (Medianer s c m) a =
@@ -580,6 +503,6 @@ onlineL1 i d f g = snd <$> M inject step extract
 {-# INLINEABLE onlineL1 #-}
 
 -- | moving median
-maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> Mealy a a
+maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> Process a a
 maL1 i d r = onlineL1 i d id (* r)
 {-# INLINEABLE maL1 #-}

@@ -2,18 +2,18 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Reverse-mode AD through a 'Mealy' scan.
+-- | Reverse-mode AD through a 'Process' scan.
 --
 -- The idea is to run the mealy with 'NumHask.Diff.Diff' as the carrier.  Each
 -- input element becomes a variable over the whole input list, so the final
 -- output (or every scan output) carries a pullback wrt every input.
-module Data.Mealy.Diff
+module Process.Stats.Diff
   ( -- * Gradient inputs
     GradInputs (..),
     variable,
     variables,
 
-    -- * Reverse-step differentiable Mealy
+    -- * Reverse-step differentiable Process
     DiffMealy (..),
     StdState (..),
     diffFold,
@@ -23,7 +23,7 @@ module Data.Mealy.Diff
     gradFold,
     gradScan,
 
-    -- * Net Mealy runners
+    -- * Net Process runners
     constant,
     netFold,
     netScan,
@@ -47,7 +47,7 @@ module Data.Mealy.Diff
 where
 
 import Data.List (length)
-import Data.Mealy (Averager (..), Mealy, fold, ma, online, scan, sqma, std, pattern A)
+import Process.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
@@ -56,7 +56,7 @@ import NumHask.Prelude hiding (fold, length)
 import Prelude ()
 
 -- $setup
--- >>> import qualified Data.Mealy as M
+-- >>> import Process.Stats qualified as PS
 -- >>> import NumHask.Diff
 
 -- | A length-indexed array used as the AD parameter for a scan.
@@ -112,11 +112,11 @@ variables xs =
 -- | Fold a list through a differentiable mealy and return the final output
 -- together with a pullback through the entire fold.
 --
--- >>> let m = M.asum :: M.Mealy (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
+-- >>> let m = PS.asum :: PS.Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
 -- (6.0,[1.0,1.0,1.0])
 gradFold ::
   (Additive a) =>
-  Mealy (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
+  Process (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
   [a] ->
   (b, b -> [a])
 gradFold _ [] = error "gradFold: empty list"
@@ -128,11 +128,11 @@ gradFold m xs =
 -- outputs together with a pullback that maps a list of output cotangents
 -- (one per step) to input cotangents.
 --
--- >>> let m = M.asum :: M.Mealy (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
+-- >>> let m = PS.asum :: PS.Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
 -- [3.0,2.0,1.0]
 gradScan ::
   (Additive a) =>
-  Mealy (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
+  Process (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
   [a] ->
   ([b], [b] -> [a])
 gradScan _ [] = ([], const [])
@@ -156,7 +156,7 @@ constant x = Diff (const (x, const zero))
 -- through the parameters.
 netFold ::
   (Additive p) =>
-  Mealy (Diff' tag p a) (Diff' tag p b) ->
+  Process (Diff' tag p a) (Diff' tag p b) ->
   p ->
   [a] ->
   (b, b -> p)
@@ -167,7 +167,7 @@ netFold m p xs = runDiff' (fold m (map constant xs)) p
 -- pullback that maps output cotangents to parameter cotangents.
 netScan ::
   (Additive p) =>
-  Mealy (Diff' tag p a) (Diff' tag p b) ->
+  Process (Diff' tag p a) (Diff' tag p b) ->
   p ->
   [a] ->
   ([b], [b] -> p)
@@ -179,7 +179,7 @@ netScan m p xs =
         foldl' (+) zero [pb db | (pb, db) <- zip (snd <$> pbs) dbs]
    in (fst <$> pbs, pullback)
 
--- | 'Data.Mealy.online' with a 'Diff'' carrier.
+-- | 'Process.Stats.online' with a 'Diff'' carrier.
 --
 -- The inject and step functions now operate on differentiable values, so the
 -- resulting mealy can be placed inside 'netFold' / 'netScan' and the
@@ -188,35 +188,35 @@ onlineDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   (Diff' tag p a -> Diff' tag p b) ->
   (Diff' tag p b -> Diff' tag p b) ->
-  Mealy (Diff' tag p a) (Diff' tag p b)
+  Process (Diff' tag p a) (Diff' tag p b)
 onlineDiff = online
 
 -- | Differentiable moving average with a learnable decay parameter.
 maDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff' tag p b ->
-  Mealy (Diff' tag p b) (Diff' tag p b)
+  Process (Diff' tag p b) (Diff' tag p b)
 maDiff = ma
 
 -- | Differentiable squared moving average with a learnable decay parameter.
 sqmaDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff' tag p b ->
-  Mealy (Diff' tag p b) (Diff' tag p b)
+  Process (Diff' tag p b) (Diff' tag p b)
 sqmaDiff = sqma
 
 -- | Differentiable standard deviation with a learnable decay parameter.
 stdDiff ::
   (Subtractive p, ExpField b) =>
   Diff' tag p b ->
-  Mealy (Diff' tag p b) (Diff' tag p b)
+  Process (Diff' tag p b) (Diff' tag p b)
 stdDiff = std
 
 -- ---------------------------------------------------------------------------
--- Reverse-step Mealy
+-- Reverse-step Process
 -- ---------------------------------------------------------------------------
 
--- | A 'Mealy' machine with explicit state and differentiable
+-- | A 'Process' machine with explicit state and differentiable
 -- inject / step / extract functions.
 --
 -- The pullbacks are captured during the forward pass and then replayed by a
@@ -310,7 +310,7 @@ diffFold m xs =
   let (ys, pullback) = diffScan m xs
    in (last ys, \dy -> pullback (replicate (length ys - 1) zero ++ [dy]))
 
--- | 'Data.Mealy.online' as a reverse-step 'DiffMealy'.
+-- | 'Process.Stats.online' as a reverse-step 'DiffMealy'.
 onlineDiffMealy ::
   (Subtractive b, Divisive b) =>
   Diff a b ->
@@ -450,7 +450,7 @@ instance (Subtractive a, Subtractive b) => Subtractive (DiffState a b) where
   negate (DiffState o p) = DiffState (negate o) (negate p)
   DiffState o1 p1 - DiffState o2 p2 = DiffState (o1 - o2) (p1 - p2)
 
--- | 'Data.Mealy.diff' as a reverse-step 'DiffMealy'.
+-- | 'Process.Stats.diff' as a reverse-step 'DiffMealy'.
 --
 -- The first output uses the supplied initial previous value @a0@ instead of
 -- 'undefined', which makes the machine differentiable.  This is exactly the

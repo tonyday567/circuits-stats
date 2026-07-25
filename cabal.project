@@ -1,5 +1,5 @@
 packages:
-  mealy.cabal
+  process-stats.cabal
   ../circuits/circuits.cabal
   ../harpie/harpie.cabal
   ../harpie-numhask/harpie-numhask.cabal
