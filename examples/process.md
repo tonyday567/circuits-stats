@@ -1,8 +1,10 @@
-# circuits-mealy ⟜ Traced Mealy Either, encode, scan triangle
+# process-stats ⟜ Traced Mealy Either, encode, scan triangle
 
 **ref** ⟜ ~/haskell/circuits/ — Trace, Hyper, Traced
 **ref** ⟜ ~/mg/examples/mealy.md — the isomorphism card (context)
-**note** ⟜ Mealy is standalone. It does not depend on circuits. This card shows the bridge — what you get when you optionally encode a Mealy into Trace or Hyper. Nothing in this card compiles as-is; it requires both `circuits` and `mealy` in scope. Use `cabal repl -b circuits` from the mealy project root.
+**note** ⟜ This card predates the `process-stats` rename. The code sketches use the
+old `Mealy` type, but the triangle — `Process` encoded as `Traced Either (->)`,
+`reify . encode = scan` — is the same idea in `Circuit.Process` terms.
 
 ## Traced Mealy Either
 
