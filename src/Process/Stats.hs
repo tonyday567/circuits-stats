@@ -80,7 +80,7 @@ import NumHask.Prelude hiding (asum, diff, fold, id, last, (.))
 -- >>> import Control.Category ((>>>))
 -- >>> import Data.List
 -- >>> import Process.Stats.Simulate
--- >>> import Harpie.Fixed qualified as F
+-- >>> import Harpie.Fixed.Generic qualified as F
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000
 -- >>> xs1 <- rvs g 10000

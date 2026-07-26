@@ -15,6 +15,7 @@ import System.Random.MWC.Probability
 -- $setup
 -- >>> :set -XFlexibleContexts
 -- >>> import Process.Stats
+-- >>> import Process.Stats.Simulate
 -- >>> gen <- create
 
 -- | rvs creates a list of standard normal random variates.
