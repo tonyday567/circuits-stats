@@ -11,8 +11,5 @@ constraints:
 
 write-ghc-environment-files: always
 
-allow-newer:
-  tdigest:base
-
 package recursion-schemes
   flags: -template-haskell
