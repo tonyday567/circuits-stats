@@ -14,10 +14,17 @@ module Process.Stats.Diff
     variables,
 
     -- * Reverse-step differentiable Process
-    DiffMealy (..),
+    DiffProcess (..),
     StdState (..),
     diffFold,
     diffScan,
+
+    -- * Reverse-step differentiable System (no inject; state external)
+    DiffSystem (..),
+    diffSystemAsDiffProcess,
+    diffProcessAsDiffSystem,
+    diffSystemScan,
+    diffSystemFold,
 
     -- * Gradient-aware runners
     gradFold,
@@ -35,10 +42,10 @@ module Process.Stats.Diff
     stdDiff,
 
     -- * Reverse-step online statistics
-    onlineDiffMealy,
-    maDiffMealy,
-    sqmaDiffMealy,
-    stdDiffMealy,
+    onlineDiffProcess,
+    maDiffProcess,
+    sqmaDiffProcess,
+    stdDiffProcess,
 
     -- * Reverse-step delay / diff
     delay1Diff,
@@ -47,12 +54,12 @@ module Process.Stats.Diff
 where
 
 import Data.List (length)
-import Process.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
 import NumHask.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
 import NumHask.Prelude hiding (fold, length)
+import Process.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Prelude ()
 
 -- $setup
@@ -222,11 +229,74 @@ stdDiff = std
 -- The pullbacks are captured during the forward pass and then replayed by a
 -- single backward walk, so the cost of a scan gradient is linear in the input
 -- length (no closure-chain blow-up).
-data DiffMealy s a b = DiffMealy
+data DiffProcess s a b = DiffProcess
   { dInject :: Diff a s,
     dStep :: Diff (s, a) s,
     dExtract :: Diff s b
   }
+
+-- | A 'System'-packaged differentiable Moore machine: state is external.
+--
+-- Same dynamics as 'DiffProcess', without @inject@.  Matches
+-- @System s (Mono i o)@ packaging (@i@ = output, @o@ = input):
+--
+-- @
+-- dsExtract :: Diff s i     -- output from state
+-- dsStep    :: Diff (s, o) s  -- next state from state and input
+-- @
+--
+-- Pair with an initial state via 'diffSystemAsDiffProcess' to reuse
+-- 'diffScan' \/ 'diffFold'.  Agents that are 'System's sit here for Diff
+-- without pretending to be 'Process' first.
+data DiffSystem s i o = DiffSystem
+  { dsExtract :: Diff s i,
+    dsStep :: Diff (s, o) s
+  }
+
+-- | Bake in @s0@: inject is one step from that state (same as 'systemAsProcess').
+--
+-- @
+-- diffSystemAsDiffProcess sys s0 :: DiffProcess s o i
+-- @
+diffSystemAsDiffProcess :: DiffSystem s i o -> s -> DiffProcess s o i
+diffSystemAsDiffProcess (DiffSystem ext step) s0 =
+  DiffProcess
+    { dInject =
+        Diff
+          ( \o ->
+              let (s', pb) = runDiff step (s0, o)
+               in (s', \ds -> snd (pb ds))
+          ),
+      dStep = step,
+      dExtract = ext
+    }
+
+-- | Drop inject: keep extract and step.  Initial state must be supplied
+-- again when scanning (via 'diffSystemAsDiffProcess' or 'diffSystemScan').
+diffProcessAsDiffSystem :: DiffProcess s a b -> DiffSystem s b a
+diffProcessAsDiffSystem (DiffProcess _ step ext) = DiffSystem ext step
+
+-- | Scan a 'DiffSystem' from external @s0@ (via 'diffSystemAsDiffProcess').
+--
+-- >>> let sys = diffProcessAsDiffSystem (maDiffProcess 0)
+-- >>> let (ys, g) = diffSystemScan sys (A 0 0) [1,2,3] in (ys, g [1,1,1])
+-- ([1.0,2.0,3.0],[1.0,1.0,1.0])
+diffSystemScan ::
+  (Additive s) =>
+  DiffSystem s i o ->
+  s ->
+  [o] ->
+  ([i], [i] -> [o])
+diffSystemScan sys s0 = diffScan (diffSystemAsDiffProcess sys s0)
+
+-- | Fold a 'DiffSystem' from external @s0@.
+diffSystemFold ::
+  (Additive s, Additive i) =>
+  DiffSystem s i o ->
+  s ->
+  [o] ->
+  (i, i -> [o])
+diffSystemFold sys s0 = diffFold (diffSystemAsDiffProcess sys s0)
 
 -- | State for a differentiable standard deviation: a moving average together
 -- with a squared moving average.
@@ -245,8 +315,8 @@ instance (Subtractive a) => Subtractive (StdState a) where
   StdState m1 s1 - StdState m2 s2 = StdState (m1 - m2) (s1 - s2)
 
 -- | Forward pass: capture states and step pullbacks.
-diffForward :: DiffMealy s a b -> [a] -> (s, [s], [s -> (s, a)], s -> a)
-diffForward (DiffMealy inj step _) (x : xs) =
+diffForward :: DiffProcess s a b -> [a] -> (s, [s], [s -> (s, a)], s -> a)
+diffForward (DiffProcess inj step _) (x : xs) =
   let (s0, injPB) = runDiff inj x
       go _ [] = ([], [])
       go s (a : as) =
@@ -283,12 +353,12 @@ diffBackward states stepPBs injPB ext dys =
       da0 = injPB dsFinal
    in da0 : das
 
--- | Scan a list through a 'DiffMealy' and return the per-step outputs together
+-- | Scan a list through a 'DiffProcess' and return the per-step outputs together
 -- with a pullback that maps output cotangents to input cotangents.
 --
--- >>> let (ys, g) = diffScan (maDiffMealy 0) [1,2,3] in (ys, g [1,1,1])
+-- >>> let (ys, g) = diffScan (maDiffProcess 0) [1,2,3] in (ys, g [1,1,1])
 -- ([1.0,2.0,3.0],[1.0,1.0,1.0])
-diffScan :: (Additive s) => DiffMealy s a b -> [a] -> ([b], [b] -> [a])
+diffScan :: (Additive s) => DiffProcess s a b -> [a] -> ([b], [b] -> [a])
 diffScan _ [] = ([], const [])
 diffScan m xs =
   let (_, states, stepPBs, injPB) = diffForward m xs
@@ -296,27 +366,27 @@ diffScan m xs =
       pullback = diffBackward states stepPBs injPB (dExtract m)
    in (ys, pullback)
 
--- | Fold a list through a 'DiffMealy' and return the final output together with
+-- | Fold a list through a 'DiffProcess' and return the final output together with
 -- a pullback through the entire fold.
 --
--- >>> let (y, g) = diffFold (maDiffMealy 0) [1,2,3] in (y, g 1)
+-- >>> let (y, g) = diffFold (maDiffProcess 0) [1,2,3] in (y, g 1)
 -- (3.0,[0.0,0.0,1.0])
 diffFold ::
   (Additive s, Additive b) =>
-  DiffMealy s a b ->
+  DiffProcess s a b ->
   [a] ->
   (b, b -> [a])
 diffFold m xs =
   let (ys, pullback) = diffScan m xs
    in (last ys, \dy -> pullback (replicate (length ys - 1) zero ++ [dy]))
 
--- | 'Process.Stats.online' as a reverse-step 'DiffMealy'.
-onlineDiffMealy ::
+-- | 'Process.Stats.online' as a reverse-step 'DiffProcess'.
+onlineDiffProcess ::
   (Subtractive b, Divisive b) =>
   Diff a b ->
   Diff b b ->
-  DiffMealy (Averager b b) a b
-onlineDiffMealy f g = DiffMealy inject step extract
+  DiffProcess (Averager b b) a b
+onlineDiffProcess f g = DiffProcess inject step extract
   where
     inject = Diff $ \x ->
       let (y, pb_f) = runDiff f x
@@ -340,38 +410,38 @@ onlineDiffMealy f g = DiffMealy inject step extract
           pb dy = A (dy / c) (-((s * dy) / (c * c)))
        in (y, pb)
 
--- | Differentiable moving average as a reverse-step 'DiffMealy'.
-maDiffMealy ::
+-- | Differentiable moving average as a reverse-step 'DiffProcess'.
+maDiffProcess ::
   (Subtractive b, Divisive b) =>
   b ->
-  DiffMealy (Averager b b) b b
-maDiffMealy r = onlineDiffMealy id (Diff $ \s -> (r * s, (r *)))
+  DiffProcess (Averager b b) b b
+maDiffProcess r = onlineDiffProcess id (Diff $ \s -> (r * s, (r *)))
 
--- | Differentiable squared moving average as a reverse-step 'DiffMealy'.
+-- | Differentiable squared moving average as a reverse-step 'DiffProcess'.
 --
--- >>> let (ys, g) = diffScan (sqmaDiffMealy 0) [1,2,3] in (ys, g [1,1,1])
+-- >>> let (ys, g) = diffScan (sqmaDiffProcess 0) [1,2,3] in (ys, g [1,1,1])
 -- ([1.0,4.0,9.0],[2.0,4.0,6.0])
-sqmaDiffMealy ::
+sqmaDiffProcess ::
   (Subtractive b, Divisive b) =>
   b ->
-  DiffMealy (Averager b b) b b
-sqmaDiffMealy r = onlineDiffMealy square (Diff $ \s -> (r * s, (r *)))
+  DiffProcess (Averager b b) b b
+sqmaDiffProcess r = onlineDiffProcess square (Diff $ \s -> (r * s, (r *)))
   where
     square = Diff $ \x -> (x * x, \ds' -> (one + one) * x * ds')
 
--- | Differentiable standard deviation as a reverse-step 'DiffMealy'.
+-- | Differentiable standard deviation as a reverse-step 'DiffProcess'.
 --
 -- The gradient is taken to be zero when the standard deviation is itself zero
 -- (for example, after a single sample), because the usual sqrt derivative is
 -- undefined at zero.
 --
--- >>> let (ys, g) = diffScan (stdDiffMealy 0) [1,2,3] in (ys, g [1,1,1])
+-- >>> let (ys, g) = diffScan (stdDiffProcess 0) [1,2,3] in (ys, g [1,1,1])
 -- ([0.0,0.0,0.0],[0.0,0.0,0.0])
-stdDiffMealy ::
+stdDiffProcess ::
   (Eq b, ExpField b) =>
   b ->
-  DiffMealy (StdState b) b b
-stdDiffMealy r = DiffMealy inject step extract
+  DiffProcess (StdState b) b b
+stdDiffProcess r = DiffProcess inject step extract
   where
     inject = Diff $ \x ->
       let pb (StdState (A ds _dc) (A dss _dcc)) =
@@ -420,14 +490,14 @@ instance (Subtractive a) => Subtractive (DelayState a) where
   negate (DelayState o p) = DelayState (negate o) (negate p)
   DelayState o1 p1 - DelayState o2 p2 = DelayState (o1 - o2) (p1 - p2)
 
--- | A one-step delay as a reverse-step 'DiffMealy'.
+-- | A one-step delay as a reverse-step 'DiffProcess'.
 --
 -- The initial output is @a0@; after that the machine emits the previous input.
 --
 -- >>> let (ys, g) = diffScan (delay1Diff 0) [1,2,3] in (ys, g [1,1,1])
 -- ([0,1,2],[1,1,0])
-delay1Diff :: (Additive a) => a -> DiffMealy (DelayState a) a a
-delay1Diff a0 = DiffMealy inject step extract
+delay1Diff :: (Additive a) => a -> DiffProcess (DelayState a) a a
+delay1Diff a0 = DiffProcess inject step extract
   where
     inject = Diff $ \a -> (DelayState a0 a, dsPrev)
     step = Diff $ \(DelayState _ prev, a) ->
@@ -450,7 +520,7 @@ instance (Subtractive a, Subtractive b) => Subtractive (DiffState a b) where
   negate (DiffState o p) = DiffState (negate o) (negate p)
   DiffState o1 p1 - DiffState o2 p2 = DiffState (o1 - o2) (p1 - p2)
 
--- | 'Process.Stats.diff' as a reverse-step 'DiffMealy'.
+-- | 'Process.Stats.diff' as a reverse-step 'DiffProcess'.
 --
 -- The first output uses the supplied initial previous value @a0@ instead of
 -- 'undefined', which makes the machine differentiable.  This is exactly the
@@ -464,8 +534,8 @@ diffDiff ::
   (Additive a, Additive b) =>
   a ->
   Diff (a, a) b ->
-  DiffMealy (DiffState a b) a b
-diffDiff a0 f = DiffMealy inject step extract
+  DiffProcess (DiffState a b) a b
+diffDiff a0 f = DiffProcess inject step extract
   where
     inject = Diff $ \a ->
       let (b, pb) = runDiff f (a0, a)

@@ -25,15 +25,15 @@ module Process.Stats.ODE
     rk4,
 
     -- * Process machines
-    eulerMealy,
-    rk4Mealy,
+    eulerProcess,
+    rk4Process,
   )
 where
 
 import Data.List (scanl')
-import Process.Stats (Process (..))
 import NumHask.Diff (Diff, runDiff, pattern Diff)
 import NumHask.Prelude
+import Process.Stats (Process (..))
 import Prelude ()
 
 -- $setup
@@ -113,7 +113,7 @@ euler ::
   s ->
   [h] ->
   [s]
-euler f y0 dts = scanl' (\y h -> eulerStep f y h) y0 dts
+euler f = scanl' (eulerStep f)
 
 -- | Integrate a 'Diff' vector field over a list of step sizes using RK4.
 --
@@ -130,26 +130,26 @@ rk4 ::
   s ->
   [h] ->
   [s]
-rk4 f y0 dts = scanl' (\y h -> rk4Step f y h) y0 dts
+rk4 f = scanl' (rk4Step f)
 
 -- | A 'Process' machine that performs Euler integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
-eulerMealy ::
+eulerProcess ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
   Diff s s ->
   s ->
   Process h s
-eulerMealy f y0 = Process (const y0) (\y h -> eulerStep f y h) id
+eulerProcess f y0 = Process (const y0) (eulerStep f) id
 
 -- | A 'Process' machine that performs RK4 integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
-rk4Mealy ::
+rk4Process ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
   Diff s s ->
   s ->
   Process h s
-rk4Mealy f y0 = Process (const y0) (\y h -> rk4Step f y h) id
+rk4Process f y0 = Process (const y0) (rk4Step f) id

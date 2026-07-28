@@ -18,7 +18,7 @@ statistical interpretation built on top of it.
 
 In the strict automata-theory sense, the type here is a **Moore machine**: the
 output depends only on the current state, not on the current input. A
-categorical Mealy machine would have output depend on both state and input
+categorical machine with input-dependent output would have type
 (`s -> a -> b`). The library keeps the streaming, input-driven transition
 `step :: s -> a -> s`, but the carrier is now the polymorphic `Process` arrow
 from `circuits`.

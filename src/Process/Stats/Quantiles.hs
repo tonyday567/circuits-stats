@@ -36,7 +36,7 @@ tdigestDelta :: Double
 tdigestDelta = 50
 
 emptyOnlineTDigest :: Double -> OnlineTDigest
-emptyOnlineTDigest r = OnlineTDigest (TD.emptyWith tdigestDelta) 0 r
+emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
 
 -- | Process quantiles based on the t-digest library.
 quantiles :: Double -> [Double] -> Process Double [Double]

@@ -61,14 +61,13 @@ where
 import Circuit.Category (id)
 import Circuit.Process (Process (..), scan)
 import Control.Exception
-import Data.List (foldl')
 import Data.Map qualified as Map
 import Data.Profunctor (lmap)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
-import GHC.TypeLits
 import Data.Vector (Vector)
+import GHC.TypeLits
 import Harpie.Fixed.Generic qualified as F
 import Harpie.NumHask qualified as N
 import Harpie.Shape qualified as S
