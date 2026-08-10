@@ -6,10 +6,4 @@ packages:
   ../numhask/numhask.cabal
   ../numhask-diff/numhask-diff.cabal
 
-constraints:
-  circuits >= 0.2
-
 write-ghc-environment-files: always
-
-package recursion-schemes
-  flags: -template-haskell
