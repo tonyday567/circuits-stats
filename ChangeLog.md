@@ -7,6 +7,12 @@
   from `circuits`.
 - Modules renamed: `Data.Mealy` → `Process.Stats`, `Data.Mealy.Diff` →
   `Process.Stats.Diff`, `Data.Mealy.Trace` → `Process.Stats.Simulate`.
+- Re-export `Circuit.Process.fold`; the local throwing `fold` is gone.
+- Move `MultiplicativeAction Double` / `DivisiveAction Double` orphan instances
+  upstream to `numhask`.
+- Add `circuits-ad` dependency and `process-stats-axioma` oracle suite (P1–P10).
+- Verify `Process.Stats.Diff` gradients against hand-derived references and
+  against `circuits-ad`.
 
 ## 0.5.2.0
 

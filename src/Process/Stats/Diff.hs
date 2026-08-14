@@ -7,6 +7,17 @@
 -- The idea is to run the mealy with 'NumHask.Diff.Diff' as the carrier.  Each
 -- input element becomes a variable over the whole input list, so the final
 -- output (or every scan output) carries a pullback wrt every input.
+--
+-- The high-level gradient runners 'gradScan' and 'gradFold' are the canonical
+-- entry points.  They already use 'NumHask.Diff' directly, which is the same
+-- primitive arrow that @circuits-ad@ builds on.  The lower-level
+-- 'DiffProcess' / 'DiffSystem' reverse-step machinery is kept because its
+-- explicit-state API (capture states and step pullbacks during the forward
+-- pass, then replay them backward) does not have a direct, API-preserving
+-- translation to @circuits-ad@'s 'Circuit.AD.Net'-based 'linearizeAt' /
+-- 'Circuit.AD.backprop'.  Where a direct @circuits-ad@ replacement is
+-- possible in the future, the oracles in @test/Oracle.hs@ provide regression
+-- guards.
 module Process.Stats.Diff
   ( -- * Gradient inputs
     GradInputs (..),
@@ -128,8 +139,11 @@ gradFold ::
   (b, b -> [a])
 gradFold _ [] = error "gradFold: empty list"
 gradFold m xs =
-  let (y, pb) = runDiff (fold m (variables xs)) (GradInputs (HA.array [length xs] xs))
-   in (y, HA.arrayAs . unGradInputs . pb)
+  case fold m (variables xs) of
+    Nothing -> error "gradFold: empty fold"
+    Just ydiff ->
+      let (y, pb) = runDiff ydiff (GradInputs (HA.array [length xs] xs))
+       in (y, HA.arrayAs . unGradInputs . pb)
 
 -- | Scan a list through a differentiable mealy and return the per-step
 -- outputs together with a pullback that maps a list of output cotangents
@@ -168,7 +182,10 @@ netFold ::
   [a] ->
   (b, b -> p)
 netFold _ _ [] = error "netFold: empty list"
-netFold m p xs = runDiff' (fold m (map constant xs)) p
+netFold m p xs =
+  case fold m (map constant xs) of
+    Nothing -> error "netFold: empty fold"
+    Just ydiff -> runDiff' ydiff p
 
 -- | Scan a network mealy and return the per-step outputs together with a
 -- pullback that maps output cotangents to parameter cotangents.
@@ -222,6 +239,14 @@ stdDiff = std
 -- ---------------------------------------------------------------------------
 -- Reverse-step Process
 -- ---------------------------------------------------------------------------
+
+-- TODO: The 'DiffProcess' / 'DiffSystem' API below is kept because its
+-- explicit-state, capture-and-replay semantics do not map directly onto
+-- @circuits-ad@'s 'Net'-based 'linearizeAt' while preserving the same
+-- types.  A future slice could either (a) provide a 'DiffProcess'-to-'Net'
+-- compiler, or (b) deprecate this API in favour of 'gradScan' / 'gradFold'
+-- plus direct @circuits-ad@ 'Circuit.Net' construction.  The oracle suite
+-- guards the current behaviour.
 
 -- | A 'Process' machine with explicit state and differentiable
 -- inject / step / extract functions.

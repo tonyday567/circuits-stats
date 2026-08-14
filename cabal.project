@@ -1,6 +1,7 @@
 packages:
   process-stats.cabal
   ../circuits/circuits.cabal
+  ../circuits-ad/circuits-ad.cabal
   ../circuits-mat/circuits-mat.cabal
   ../harpie/harpie.cabal
   ../numhask/numhask.cabal

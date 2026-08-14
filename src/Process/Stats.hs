@@ -3,6 +3,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
 -- | Streaming statistics and state-machine specialisations built on
 -- 'Circuit.Process.Process'.
@@ -10,6 +11,10 @@
 -- The 'Process' carrier itself lives in "Circuit.Process"; this module is the
 -- box library: moving averages, standard deviations, regression, quantiles,
 -- delays, and related streaming combinators.
+--
+-- 'fold' is re-exported from "Circuit.Process" and is total (it returns
+-- 'Nothing' for an empty list). The statistical implementations in this module
+-- are the canonical @process-stats@ reference boxes.
 module Process.Stats
   ( -- * Process re-export
     Process (..),
@@ -59,7 +64,7 @@ module Process.Stats
 where
 
 import Circuit.Category (id)
-import Circuit.Process (Process (..), scan)
+import Circuit.Process (Process (..), fold, scan)
 import Control.Exception
 import Data.Map qualified as Map
 import Data.Profunctor (lmap)
@@ -90,8 +95,10 @@ fromBox (Box.Array v) = F.Array v
 -- >>> :set -XDataKinds
 -- >>> import Control.Category ((>>>))
 -- >>> import Data.List
+-- >>> import Data.Maybe (fromMaybe)
 -- >>> import Process.Stats.Simulate
 -- >>> import Harpie.Fixed.Generic qualified as F
+-- >>> let fold' p = fromMaybe (error "fold': empty input") . fold p
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000
 -- >>> xs1 <- rvs g 10000
@@ -106,7 +113,9 @@ fromBox (Box.Array v) = F.Array v
 -- - xsp is a pair of N(0,1)s with a correlation of 0.8
 --
 -- >>> :set -XDataKinds
+-- >>> import Data.Maybe (fromMaybe)
 -- >>> import Process.Stats.Simulate
+-- >>> let fold' p = fromMaybe (error "fold': empty input") . fold p
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000
 -- >>> xs1 <- rvs g 10000
@@ -121,14 +130,6 @@ instance Exception ProcessStatsError
 -- | Create a 'Process' from a (pure) binary operation.
 dipure :: (a -> a -> a) -> Process a a
 dipure f = Process id f id
-
--- | Fold a list through a 'Process'.
---
--- Throws a 'ProcessStatsError' on an empty list. For a total variant see
--- 'Circuit.Process.fold'.
-fold :: Process a b -> [a] -> b
-fold _ [] = throw (ProcessStatsError "empty list")
-fold (Process i s e) (x : xs) = e $ foldl' s (i x) xs
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
@@ -202,13 +203,13 @@ online f g = Process intract step av
 
 -- | A moving average using a decay rate of r. r=1 represents the simple average, and r=0 represents the latest value.
 --
--- >>> fold (ma 0) ([1..100])
+-- >>> fold' (ma 0) ([1..100])
 -- 100.0
 --
--- >>> fold (ma 1) ([1..100])
+-- >>> fold' (ma 1) ([1..100])
 -- 50.5
 --
--- >>> fold (ma 0.99) xs0
+-- >>> fold' (ma 0.99) xs0
 -- 9.713356299018187e-2
 ma :: (Divisive a, Additive a) => a -> Process a a
 ma r = online id (* r)
@@ -216,7 +217,7 @@ ma r = online id (* r)
 
 -- | absolute average
 --
--- >>> fold (absma 1) xs0
+-- >>> fold' (absma 1) xs0
 -- 0.8075705557429647
 absma :: (Divisive a, Absolute a) => a -> Process a a
 absma r = online abs (* r)
@@ -224,7 +225,7 @@ absma r = online abs (* r)
 
 -- | average square
 --
--- > fold (ma r) . fmap (**2) == fold (sqma r)
+-- > fold' (ma r) . fmap (**2) == fold' (sqma r)
 sqma :: (Divisive a, Additive a) => a -> Process a a
 sqma r = online (\x -> x * x) (* r)
 {-# INLINEABLE sqma #-}
@@ -238,15 +239,15 @@ sqma r = online (\x -> x * x) (* r)
 -- The average deviation of the numbers 1..1000 is about 1 / sqrt 12 * 1000
 -- <https://en.wikipedia.org/wiki/Uniform_distribution_(continuous)#Standard_uniform>
 --
--- >>> fold (std 1) [0..1000]
+-- >>> fold' (std 1) [0..1000]
 -- 288.9636655359978
 --
 -- The average deviation with a decay of 0.99
 --
--- >>> fold (std 0.99) [0..1000]
+-- >>> fold' (std 0.99) [0..1000]
 -- 99.28328803163829
 --
--- >>> fold (std 1) xs0
+-- >>> fold' (std 1) xs0
 -- 1.0126438036262801
 std :: (ExpField a) => a -> Process a a
 std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
@@ -254,7 +255,7 @@ std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
 
 -- | The covariance of a tuple given an underlying central tendency fold.
 --
--- >>> fold (cov (ma 1)) xsp
+-- >>> fold' (cov (ma 1)) xsp
 -- 0.7818936662586868
 cov :: (Field a) => Process a a -> Process (a, a) a
 cov m =
@@ -263,7 +264,7 @@ cov m =
 
 -- | correlation of a tuple, specialised to Guassian
 --
--- >>> fold (corrGauss 1) xsp
+-- >>> fold' (corrGauss 1) xsp
 -- 0.7978347126677433
 corrGauss :: (ExpField a) => a -> Process (a, a) a
 corrGauss r =
@@ -275,7 +276,7 @@ corrGauss r =
 
 -- | a generalised version of correlation of a tuple
 --
--- >>> fold (corr (ma 1) (std 1)) xsp
+-- >>> fold' (corr (ma 1) (std 1)) xsp
 -- 0.7978347126677433
 --
 -- > corr (ma r) (std r) == corrGauss r
@@ -299,7 +300,7 @@ corr central deviation =
 -- \end{align}
 -- \]
 --
--- >>> fold (beta1 (ma 1)) $ zipWith (\x y -> (y, x + y)) xs0 xs1
+-- >>> fold' (beta1 (ma 1)) $ zipWith (\x y -> (y, x + y)) xs0 xs1
 -- 0.999747321294513
 beta1 :: (ExpField a) => Process a a -> Process (a, a) a
 beta1 m =
@@ -320,7 +321,7 @@ beta1 m =
 -- \end{align}
 -- \]
 --
--- >>> fold (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
+-- >>> fold' (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- 1.3680496627365146e-2
 alpha1 :: (ExpField a) => Process a a -> Process (a, a) a
 alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
@@ -328,7 +329,7 @@ alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
 
 -- | The (alpha, beta) tuple in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
 --
--- >>> fold (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
+-- >>> fold' (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- (1.3680496627365146e-2,0.4997473212944953)
 reg1 :: (ExpField a) => Process a a -> Process (a, a) (a, a)
 reg1 m = (,) <$> alpha1 m <*> beta1 m
@@ -357,7 +358,7 @@ data RegressionState (n :: Nat) a = RegressionState
 --
 -- >>> let ys = zipWith3 (\x y z -> 0.1 * x + 0.5 * y + 1 * z) xs0 xs1 xs2
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
--- >>> fold (beta 0.99) zs
+-- >>> fold' (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
 beta :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
 beta r = Process inject step extract
@@ -395,7 +396,7 @@ arrayify (Process sExtract sStep sInject) = Process extract step inject
 --
 -- >>> let ys = zipWith3 (\x y z -> 0.1 * x + 0.5 * y + 1 * z) xs0 xs1 xs2
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
--- >>> fold (reg 0.99) zs
+-- >>> fold' (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
 reg :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = (,) <$> beta r <*> alpha r
