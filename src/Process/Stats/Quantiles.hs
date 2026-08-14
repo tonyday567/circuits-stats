@@ -106,12 +106,13 @@ digitize r qs = Process inject step extract
         qs' = fromMaybe (0 / 0) . (`TD.quantile` t) <$> qs
         (OnlineTDigest t _ _) = onlineForceCompress x
         bucket' xs l' =
-          fold (Process id (+) id) $
-            ( \x' ->
-                if x' > l'
-                  then 0
-                  else 1
-            )
+          fromMaybe 0
+            . fold (Process id (+) id)
+            $ ( \x' ->
+                  if x' > l'
+                    then 0
+                    else 1
+              )
               <$> xs
 
 -- | transform an input to a [0,1] signal, via digitalization.
