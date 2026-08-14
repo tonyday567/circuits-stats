@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-pattern-namespace-specifier -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
 -- | Ordinary differential equation integrators as streaming 'Process' machines.
 --
@@ -12,6 +12,9 @@
 -- The step size is kept separate from the state so that vector-valued states
 -- (for example 'NumHask.Algebra.Metric.EuclideanPair') can be stepped with a
 -- scalar step size.
+--
+-- The scalar self-actions for 'Double' (and 'Float') that this module used to
+-- supply as orphan instances now live in "NumHask.Algebra.Action".
 module Process.Stats.ODE
   ( -- * Vector fields
     vectorField,
@@ -44,15 +47,6 @@ import Prelude ()
 -- >>> import Process.Stats.ODE
 -- >>> import NumHask.Algebra.Metric (EuclideanPair (..))
 -- >>> import NumHask.Diff (Diff, runDiff)
-
--- | Orphan self-action for 'Double' so scalar states can use the same
--- generic step interface as vector states.
-instance MultiplicativeAction Double where
-  type Scalar Double = Double
-  (|*) = (*)
-
-instance DivisiveAction Double where
-  (|/) = (/)
 
 -- | Lift a pure vector field into a 'Diff' with zero pullback.
 --
