@@ -68,10 +68,22 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Vector (Vector)
 import GHC.TypeLits
+import Circuit.Mat.Field (inverseM)
+import Harpie.Fixed qualified as Box
 import Harpie.Fixed.Generic qualified as F
-import Harpie.NumHask qualified as N
 import Harpie.Shape qualified as S
-import NumHask.Prelude hiding (asum, diff, fold, id, last, (.))
+import NumHask.Prelude hiding (asum, diff, fold, id, last, (.), (|*))
+
+-- | Scale a functorial container by a scalar.
+(|*) :: (Functor f, Multiplicative a) => f a -> a -> f a
+a |* s = fmap (* s) a
+
+-- | Convert between the generic vector array and the boxed default array.
+toBox :: F.Array Vector s a -> Box.Array s a
+toBox (F.Array v) = Box.Array v
+
+fromBox :: Box.Array s a -> F.Array Vector s a
+fromBox (Box.Array v) = F.Array v
 
 -- $setup
 --
@@ -347,14 +359,14 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
-beta :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
+beta :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
 beta r = Process inject step extract
   where
     -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
     extract (A (RegressionState xx x xy y) c) =
-      (\a b -> recip a `N.mult` b)
-        ((xx - F.expand (*) x x) |* (one / c))
-        ((xy - (x |* y)) |* (one / c))
+      let a = F.zipWith (-) xx (F.expand (*) x x) |* (one / c)
+          b = F.zipWith (-) xy (x |* y) |* (one / c)
+       in fromBox (inverseM (toBox a)) `F.mult` b
     step x (xs, y) = rsOnline r x (inject (xs, y))
     -- inject :: (F.Array Vector '[n] a, a) -> Averager (RegressionState n a) a
     inject (xs, y) =
@@ -368,7 +380,7 @@ rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') 
     d s s' = r * s + s'
 
 -- | alpha in a multiple regression
-alpha :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) a
+alpha :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) a
 alpha r = (\xs b y -> y - sum (F.zipWith (*) b xs)) <$> lmap fst (arrayify $ ma r) <*> beta r <*> lmap snd (ma r)
 {-# INLINEABLE alpha #-}
 
@@ -385,7 +397,7 @@ arrayify (Process sExtract sStep sInject) = Process extract step inject
 -- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
-reg :: (ExpField a, KnownNat n, Eq a, Num a) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
+reg :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = (,) <$> beta r <*> alpha r
 {-# INLINEABLE reg #-}
 

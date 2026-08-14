@@ -55,10 +55,10 @@ library
   build-depends:
     adjunctions >=4.0 && <4.5,
     base >=4.14 && <5,
-    circuits >=0.2 && <0.4,
+    circuits >=0.2 && <0.5,
+    circuits-mat >=0.1 && <0.2,
     containers >=0.6 && <0.9,
     harpie >=0.1 && <0.4,
-    harpie-numhask >=0.1 && <0.4,
     mwc-probability >=2.3.1 && <2.4,
     numhask >=0.14 && <0.15,
     numhask-diff >=0.1 && <0.2,

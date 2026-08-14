@@ -1,8 +1,8 @@
 packages:
   process-stats.cabal
   ../circuits/circuits.cabal
+  ../circuits-mat/circuits-mat.cabal
   ../harpie/harpie.cabal
-  ../harpie-numhask/harpie-numhask.cabal
   ../numhask/numhask.cabal
   ../numhask-diff/numhask-diff.cabal
 
