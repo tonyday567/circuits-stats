@@ -14,6 +14,22 @@ a standard deviation) as current state within a process context. The carrier
 type now lives in `circuits` as `Circuit.Process.Process`; this package is the
 statistical interpretation built on top of it.
 
+## Circuits ecosystem relationship
+
+`process-stats` is a client of the `circuits` ecosystem:
+
+- The state-machine arrow is `Circuit.Process.Process` from `circuits`.
+- Reverse-mode gradients share the same `NumHask.Diff.Diff` primitive arrow
+  that `circuits-ad` builds on; `Process.Stats.Diff` is verified against
+  `circuits-ad` in the `process-stats-axioma` oracle suite (P10).
+- Scalar self-actions for `Double` (used by the ODE integrators) now live in
+  `numhask`, removing the orphan instances that previously lived in
+  `Process.Stats.ODE`.
+
+The statistical implementations (`online`, `ma`, `sqma`, `std`, `cov`,
+`reg`, quantiles, etc.) remain the canonical `process-stats` reference
+implementations.
+
 ## Naming note
 
 In the strict automata-theory sense, the type here is a **Moore machine**: the
@@ -32,16 +48,34 @@ applicative style.
 
 ```haskell
 import Prelude
+import Data.Maybe (fromMaybe)
 import Process.Stats
 ```
 
 ```haskell
-fold ((,) <$> ma 0.9 <*> std 0.9) [1..100::Double]
+fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100::Double]
 ```
 
 ```
 (91.00265621044142,9.472822289121)
 ```
+
+`fold` is re-exported from `Circuit.Process.fold` and is therefore total:
+it returns `Nothing` for an empty input list and `Just` the final output
+otherwise.
+
+## Backport notes
+
+- `fold` is now the total `Circuit.Process.fold`.
+- `Process.Stats.ODE` no longer contains orphan `MultiplicativeAction Double`
+  / `DivisiveAction Double` instances; they have moved upstream to
+  `NumHask.Algebra.Action`.
+- `Process.Stats.Diff` keeps its stable API. The high-level runners
+  (`gradScan`, `gradFold`) already use `NumHask.Diff` directly; the
+  lower-level `DiffProcess` / `DiffSystem` capture-and-replay machinery is
+  retained because it does not have a direct, API-preserving translation to
+  `circuits-ad`'s `Net`-based `linearizeAt` / `backprop`. The oracle suite
+  guards the current behaviour and cross-checks it against `circuits-ad`.
 
 ## Reference
 
