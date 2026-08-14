@@ -4,20 +4,20 @@
 
 -- | Reverse-mode AD through a 'Process' scan.
 --
--- The idea is to run the mealy with 'NumHask.Diff.Diff' as the carrier.  Each
+-- The idea is to run the mealy with 'Circuit.Diff.Diff' as the carrier.  Each
 -- input element becomes a variable over the whole input list, so the final
 -- output (or every scan output) carries a pullback wrt every input.
 --
 -- The high-level gradient runners 'gradScan' and 'gradFold' are the canonical
--- entry points.  They already use 'NumHask.Diff' directly, which is the same
--- primitive arrow that @circuits-ad@ builds on.  The lower-level
+-- entry points.  They already use 'Circuit.Diff' directly, which is the same
+-- primitive arrow that @circuits-diff@ builds on.  The lower-level
 -- 'DiffProcess' / 'DiffSystem' reverse-step machinery is kept because its
 -- explicit-state API (capture states and step pullbacks during the forward
 -- pass, then replay them backward) does not have a direct, API-preserving
--- translation to @circuits-ad@'s 'Circuit.AD.Net'-based 'linearizeAt' /
--- 'Circuit.AD.backprop'.  Where a direct @circuits-ad@ replacement is
--- possible in the future, the oracles in @test/Oracle.hs@ provide regression
--- guards.
+-- translation to @circuits-diff@'s 'Circuit.Diff.Backprop.linearizeAt' /
+-- 'Circuit.Diff.Backprop.backprop'.  Where a direct @circuits-diff@
+-- replacement is possible in the future, the oracles in @test/Oracle.hs@
+-- provide regression guards.
 module Process.Stats.Diff
   ( -- * Gradient inputs
     GradInputs (..),
@@ -68,14 +68,14 @@ import Data.List (length)
 import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
-import NumHask.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
+import Circuit.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
 import NumHask.Prelude hiding (fold, length)
 import Process.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Prelude ()
 
 -- $setup
 -- >>> import Process.Stats qualified as PS
--- >>> import NumHask.Diff
+-- >>> import Circuit.Diff
 
 -- | A length-indexed array used as the AD parameter for a scan.
 --

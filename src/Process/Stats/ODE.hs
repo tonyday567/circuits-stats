@@ -34,7 +34,7 @@ module Process.Stats.ODE
 where
 
 import Data.List (scanl')
-import NumHask.Diff (Diff, runDiff, pattern Diff)
+import Circuit.Diff (Diff, runDiff, pattern Diff)
 import NumHask.Prelude
 import Process.Stats (Process (..))
 import Prelude ()
@@ -46,7 +46,7 @@ import Prelude ()
 -- >>> import NumHask.Prelude
 -- >>> import Process.Stats.ODE
 -- >>> import NumHask.Algebra.Metric (EuclideanPair (..))
--- >>> import NumHask.Diff (Diff, runDiff)
+-- >>> import Circuit.Diff (Diff, runDiff)
 
 -- | Lift a pure vector field into a 'Diff' with zero pullback.
 --

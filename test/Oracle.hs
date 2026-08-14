@@ -13,7 +13,7 @@
 -- @circuits-ad@ on a shared quadratic computation.
 module Main where
 
-import Circuit.AD (Diff, pattern Diff, quadD, runDiff)
+import Circuit.Diff.Circuit (Diff, data Diff, quadD, runDiff)
 import Circuit.Process (Process (..), fold, scan)
 import Data.List (last, sort)
 import NumHask.Prelude hiding (fold, id, last)
