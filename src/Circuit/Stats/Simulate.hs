@@ -14,6 +14,7 @@ import System.Random.MWC.Probability
 
 -- $setup
 -- >>> :set -XFlexibleContexts
+-- >>> import NumHask.Prelude hiding (fold)
 -- >>> import Circuit.Stats
 -- >>> import Circuit.Stats.Simulate
 -- >>> gen <- create
@@ -28,10 +29,10 @@ import System.Random.MWC.Probability
 --
 -- >>> rs <- rvs gen 10000
 -- >>> fold (ma 1) rs
--- 1.29805301109162e-2
+-- Just 1.29805301109162e-2
 --
 -- >>> fold (std 1) rs
--- 1.0126527176272948
+-- Just 1.0126527176272948
 rvs :: Gen (PrimState IO) -> Int -> IO [Double]
 rvs gen n = samples n standardNormal gen
 
@@ -42,7 +43,7 @@ rvs gen n = samples n standardNormal gen
 --
 -- >>> rsp <- rvsp gen 10000 0.8
 -- >>> fold (corr (ma 1) (std 1)) rsp
--- 0.8050112742986588
+-- Just 0.8050112742986588
 rvsp :: Gen (PrimState IO) -> Int -> Double -> IO [(Double, Double)]
 rvsp gen n c = do
   s0 <- rvs gen n

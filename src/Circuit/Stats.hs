@@ -97,6 +97,7 @@ fromBox (Box.Array v) = F.Array v
 -- >>> import Data.List
 -- >>> import Data.Maybe (fromMaybe)
 -- >>> import Circuit.Stats.Simulate
+-- >>> import Data.Vector (Vector)
 -- >>> import Harpie.Fixed.Generic qualified as F
 -- >>> let fold' p = fromMaybe (error "fold': empty input") . fold p
 -- >>> g <- create
@@ -357,7 +358,7 @@ data RegressionState (n :: Nat) a = RegressionState
 -- \]
 --
 -- >>> let ys = zipWith3 (\x y z -> 0.1 * x + 0.5 * y + 1 * z) xs0 xs1 xs2
--- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
+-- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
 beta :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
@@ -395,7 +396,7 @@ arrayify (Process sExtract sStep sInject) = Process extract step inject
 -- | multiple regression
 --
 -- >>> let ys = zipWith3 (\x y z -> 0.1 * x + 0.5 * y + 1 * z) xs0 xs1 xs2
--- >>> let zs = zip (zipWith (\x y -> F.array @'[2] [x,y]) xs1 xs2) ys
+-- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
 reg :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)

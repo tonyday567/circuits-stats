@@ -304,7 +304,7 @@ diffProcessAsDiffSystem (DiffProcess _ step ext) = DiffSystem ext step
 -- | Scan a 'DiffSystem' from external @s0@ (via 'diffSystemAsDiffProcess').
 --
 -- >>> let sys = diffProcessAsDiffSystem (maDiffProcess 0)
--- >>> let (ys, g) = diffSystemScan sys (A 0 0) [1,2,3] in (ys, g [1,1,1])
+-- >>> let (ys, g) = diffSystemScan sys (PS.A 0 0) [1,2,3] in (ys, g [1,1,1])
 -- ([1.0,2.0,3.0],[1.0,1.0,1.0])
 diffSystemScan ::
   (Additive s) =>
