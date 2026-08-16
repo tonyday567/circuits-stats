@@ -13,10 +13,15 @@
 -- @circuits-ad@ on a shared quadratic computation.
 module Main where
 
-import Circuit.Diff.Circuit (Diff, data Diff, quadD, runDiff)
+import Circuit.Diff.Circuit (Diff, quadD, runDiff, data Diff)
 import Circuit.Process (Process (..), fold, scan)
-import Data.List (last, sort)
-import NumHask.Prelude hiding (fold, id, last)
+import Circuit.Stats
+  ( cov,
+    gdiff,
+    ma,
+    reg1,
+    std,
+  )
 import Circuit.Stats.Diff
   ( GradInputs,
     diffScan,
@@ -26,13 +31,8 @@ import Circuit.Stats.Diff
   )
 import Circuit.Stats.ODE (euler, rk4, vectorField)
 import Circuit.Stats.Quantiles (median, quantiles)
-import Circuit.Stats
-  ( cov,
-    gdiff,
-    ma,
-    reg1,
-    std,
-  )
+import Data.List (last, sort)
+import NumHask.Prelude hiding (fold, id, last)
 import System.Exit (exitFailure, exitSuccess)
 import Prelude ()
 

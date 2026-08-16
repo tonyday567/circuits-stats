@@ -33,10 +33,10 @@ module Circuit.Stats.ODE
   )
 where
 
-import Data.List (scanl')
 import Circuit.Diff (Diff, runDiff, pattern Diff)
-import NumHask.Prelude
 import Circuit.Stats (Process (..))
+import Data.List (scanl')
+import NumHask.Prelude
 import Prelude ()
 
 -- $setup

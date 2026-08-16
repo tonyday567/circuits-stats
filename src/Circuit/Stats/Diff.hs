@@ -64,13 +64,13 @@ module Circuit.Stats.Diff
   )
 where
 
+import Circuit.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
+import Circuit.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Data.List (length)
 import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
-import Circuit.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
 import NumHask.Prelude hiding (fold, length)
-import Circuit.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Prelude ()
 
 -- $setup

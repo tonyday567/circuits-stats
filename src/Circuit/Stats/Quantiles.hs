@@ -14,9 +14,9 @@ module Circuit.Stats.Quantiles
   )
 where
 
+import Circuit.Stats
 import Data.Sketch.TDigest qualified as TD
 import NumHask.Prelude hiding (fold)
-import Circuit.Stats
 
 -- | An online t-digest with exponential decay weighting.
 --

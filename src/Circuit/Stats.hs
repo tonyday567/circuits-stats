@@ -64,6 +64,7 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id)
+import Circuit.Mat.Field (inverseM)
 import Circuit.Process (Process (..), fold, scan)
 import Control.Exception
 import Data.Map qualified as Map
@@ -73,7 +74,6 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Vector (Vector)
 import GHC.TypeLits
-import Circuit.Mat.Field (inverseM)
 import Harpie.Fixed qualified as Box
 import Harpie.Fixed.Generic qualified as F
 import Harpie.Shape qualified as S
