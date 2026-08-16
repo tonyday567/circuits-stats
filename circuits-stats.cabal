@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: process-stats
+name: circuits-stats
 version: 0.1.0.0
 license: BSD-3-Clause
 license-file: LICENSE
@@ -7,24 +7,24 @@ copyright: Tony Day (c) 2025-2026
 category: control
 author: Tony Day
 maintainer: tonyday567@gmail.com
-homepage: https://github.com/tonyday567/process-stats#readme
-bug-reports: https://github.com/tonyday567/process-stats/issues
+homepage: https://github.com/tonyday567/circuits-stats#readme
+bug-reports: https://github.com/tonyday567/circuits-stats/issues
 synopsis: Statistical processes on top of circuits.
 description:
-  @process-stats@ provides streaming statistics and other state-machine
+  @circuits-stats@ provides streaming statistics and other state-machine
   specialisations built on the 'Circuit.Process' carrier from @circuits@.
   The arrow itself lives in @circuits@; this package is the box library:
   moving averages, standard deviations, quantiles, ODEs, differentiable
   processes, and simulation helpers.
 
   The 'fold' runner is re-exported from "Circuit.Process" and is total
-  (returns 'Nothing' on empty input). The @process-stats-axioma@ test suite
+  (returns 'Nothing' on empty input). The @circuits-stats-axioma@ test suite
   contains regression oracles for the statistics, ODE integrators, quantiles,
   and gradient runners.
 
   == Usage
 
-  >>> import Process.Stats
+  >>> import Circuit.Stats
   >>> import Data.Maybe (fromMaybe)
 
   >>> fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100]
@@ -42,7 +42,7 @@ extra-doc-files:
 
 source-repository head
   type: git
-  location: https://github.com/tonyday567/process-stats
+  location: https://github.com/tonyday567/circuits-stats
 
 common ghc-options-stanza
   ghc-options:
@@ -77,13 +77,13 @@ library
     vector-algorithms >=0.8.0 && <0.10,
 
   exposed-modules:
-    Process.Stats
-    Process.Stats.Diff
-    Process.Stats.ODE
-    Process.Stats.Quantiles
-    Process.Stats.Simulate
+    Circuit.Stats
+    Circuit.Stats.Diff
+    Circuit.Stats.ODE
+    Circuit.Stats.Quantiles
+    Circuit.Stats.Simulate
 
-test-suite process-stats-axioma
+test-suite circuits-stats-axioma
   import: ghc-options-stanza
   type: exitcode-stdio-1.0
   main-is: Oracle.hs
@@ -96,5 +96,5 @@ test-suite process-stats-axioma
     harpie >=0.1 && <0.4,
     numhask >=0.14 && <0.15,
     circuits-diff >=0.1 && <0.2,
-    process-stats,
+    circuits-stats,
 

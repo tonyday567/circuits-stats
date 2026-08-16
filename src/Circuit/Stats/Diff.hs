@@ -18,7 +18,7 @@
 -- 'Circuit.Diff.Backprop.backprop'.  Where a direct @circuits-diff@
 -- replacement is possible in the future, the oracles in @test/Oracle.hs@
 -- provide regression guards.
-module Process.Stats.Diff
+module Circuit.Stats.Diff
   ( -- * Gradient inputs
     GradInputs (..),
     variable,
@@ -70,11 +70,11 @@ import Harpie.Array (Array)
 import Harpie.Array qualified as HA
 import Circuit.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
 import NumHask.Prelude hiding (fold, length)
-import Process.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
+import Circuit.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Prelude ()
 
 -- $setup
--- >>> import Process.Stats qualified as PS
+-- >>> import Circuit.Stats qualified as PS
 -- >>> import Circuit.Diff
 
 -- | A length-indexed array used as the AD parameter for a scan.
@@ -203,7 +203,7 @@ netScan m p xs =
         foldl' (+) zero [pb db | (pb, db) <- zip (snd <$> pbs) dbs]
    in (fst <$> pbs, pullback)
 
--- | 'Process.Stats.online' with a 'Diff'' carrier.
+-- | 'Circuit.Stats.online' with a 'Diff'' carrier.
 --
 -- The inject and step functions now operate on differentiable values, so the
 -- resulting mealy can be placed inside 'netFold' / 'netScan' and the
@@ -405,7 +405,7 @@ diffFold m xs =
   let (ys, pullback) = diffScan m xs
    in (last ys, \dy -> pullback (replicate (length ys - 1) zero ++ [dy]))
 
--- | 'Process.Stats.online' as a reverse-step 'DiffProcess'.
+-- | 'Circuit.Stats.online' as a reverse-step 'DiffProcess'.
 onlineDiffProcess ::
   (Subtractive b, Divisive b) =>
   Diff a b ->
@@ -545,7 +545,7 @@ instance (Subtractive a, Subtractive b) => Subtractive (DiffState a b) where
   negate (DiffState o p) = DiffState (negate o) (negate p)
   DiffState o1 p1 - DiffState o2 p2 = DiffState (o1 - o2) (p1 - p2)
 
--- | 'Process.Stats.diff' as a reverse-step 'DiffProcess'.
+-- | 'Circuit.Stats.diff' as a reverse-step 'DiffProcess'.
 --
 -- The first output uses the supplied initial previous value @a0@ instead of
 -- 'undefined', which makes the machine differentiable.  This is exactly the

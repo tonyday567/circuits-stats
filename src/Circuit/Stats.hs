@@ -14,8 +14,8 @@
 --
 -- 'fold' is re-exported from "Circuit.Process" and is total (it returns
 -- 'Nothing' for an empty list). The statistical implementations in this module
--- are the canonical @process-stats@ reference boxes.
-module Process.Stats
+-- are the canonical @circuits-stats@ reference boxes.
+module Circuit.Stats
   ( -- * Process re-export
     Process (..),
     dipure,
@@ -96,7 +96,7 @@ fromBox (Box.Array v) = F.Array v
 -- >>> import Control.Category ((>>>))
 -- >>> import Data.List
 -- >>> import Data.Maybe (fromMaybe)
--- >>> import Process.Stats.Simulate
+-- >>> import Circuit.Stats.Simulate
 -- >>> import Harpie.Fixed.Generic qualified as F
 -- >>> let fold' p = fromMaybe (error "fold': empty input") . fold p
 -- >>> g <- create
@@ -106,7 +106,7 @@ fromBox (Box.Array v) = F.Array v
 -- >>> xsp <- rvsp g 10000 0.8
 
 -- $example-set
--- The doctest examples are composed from some random series generated with Process.Stats.Simulate.
+-- The doctest examples are composed from some random series generated with Circuit.Stats.Simulate.
 --
 -- - xs0, xs1 & xs2 are samples from N(0,1)
 --
@@ -114,7 +114,7 @@ fromBox (Box.Array v) = F.Array v
 --
 -- >>> :set -XDataKinds
 -- >>> import Data.Maybe (fromMaybe)
--- >>> import Process.Stats.Simulate
+-- >>> import Circuit.Stats.Simulate
 -- >>> let fold' p = fromMaybe (error "fold': empty input") . fold p
 -- >>> g <- create
 -- >>> xs0 <- rvs g 10000

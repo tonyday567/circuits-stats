@@ -1,7 +1,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 
 -- | Process quantile statistics.
-module Process.Stats.Quantiles
+module Circuit.Stats.Quantiles
   ( median,
     quantiles,
     digitize,
@@ -16,7 +16,7 @@ where
 
 import Data.Sketch.TDigest qualified as TD
 import NumHask.Prelude hiding (fold)
-import Process.Stats
+import Circuit.Stats
 
 -- | An online t-digest with exponential decay weighting.
 --

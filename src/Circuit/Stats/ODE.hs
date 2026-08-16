@@ -15,7 +15,7 @@
 --
 -- The scalar self-actions for 'Double' (and 'Float') that this module used to
 -- supply as orphan instances now live in "NumHask.Algebra.Action".
-module Process.Stats.ODE
+module Circuit.Stats.ODE
   ( -- * Vector fields
     vectorField,
 
@@ -36,7 +36,7 @@ where
 import Data.List (scanl')
 import Circuit.Diff (Diff, runDiff, pattern Diff)
 import NumHask.Prelude
-import Process.Stats (Process (..))
+import Circuit.Stats (Process (..))
 import Prelude ()
 
 -- $setup
@@ -44,7 +44,7 @@ import Prelude ()
 -- >>> :m -Prelude
 -- >>> :set -XRebindableSyntax
 -- >>> import NumHask.Prelude
--- >>> import Process.Stats.ODE
+-- >>> import Circuit.Stats.ODE
 -- >>> import NumHask.Algebra.Metric (EuclideanPair (..))
 -- >>> import Circuit.Diff (Diff, runDiff)
 

@@ -5,11 +5,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Oracle suite for the process-stats backport.
+-- | Oracle suite for the circuits-stats backport.
 --
 -- P1–P8 exercise the canonical statistical / ODE / quantile implementations.
--- P9 checks that the gradient runners in "Process.Stats.Diff" agree with
--- hand-derived references.  P10 cross-checks "Process.Stats.Diff" against
+-- P9 checks that the gradient runners in "Circuit.Stats.Diff" agree with
+-- hand-derived references.  P10 cross-checks "Circuit.Stats.Diff" against
 -- @circuits-ad@ on a shared quadratic computation.
 module Main where
 
@@ -17,16 +17,16 @@ import Circuit.Diff.Circuit (Diff, data Diff, quadD, runDiff)
 import Circuit.Process (Process (..), fold, scan)
 import Data.List (last, sort)
 import NumHask.Prelude hiding (fold, id, last)
-import Process.Stats.Diff
+import Circuit.Stats.Diff
   ( GradInputs,
     diffScan,
     gradFold,
     maDiffProcess,
     sqmaDiffProcess,
   )
-import Process.Stats.ODE (euler, rk4, vectorField)
-import Process.Stats.Quantiles (median, quantiles)
-import Process.Stats
+import Circuit.Stats.ODE (euler, rk4, vectorField)
+import Circuit.Stats.Quantiles (median, quantiles)
+import Circuit.Stats
   ( cov,
     gdiff,
     ma,
@@ -126,7 +126,7 @@ p7 = do
       h = 0.1
       y0 = 1.0
       eulerTraj = euler f y0 (replicate 10 h)
-      rk4Traj = Process.Stats.ODE.rk4 f y0 (replicate 10 h)
+      rk4Traj = Circuit.Stats.ODE.rk4 f y0 (replicate 10 h)
       expectedEuler = scanl (\y _ -> y + h * y) y0 (replicate 10 ())
       eulerError = abs (last eulerTraj - exp 1)
       rk4Error = abs (last rk4Traj - exp 1)
@@ -152,10 +152,10 @@ p9 = do
       (_, g3) = diffScan (maDiffProcess 0) [1, 2, 3 :: Double]
   pure $ g1 1 == [1, 1, 1] && g2 [1, 1, 1] == [2, 4, 6] && g3 [1, 1, 1] == [1, 1, 1]
 
--- | P10: circuits-ad agrees with Process.Stats.Diff on a quadratic.
+-- | P10: circuits-ad agrees with Circuit.Stats.Diff on a quadratic.
 --
 -- The shared computation is @f(x) = 2x^2 + 3x + 5@ at @x = 1@.  Both the
--- 'Process.Stats.Diff' scan (over a single input) and @circuits-ad@'s 'quadD'
+-- 'Circuit.Stats.Diff' scan (over a single input) and @circuits-ad@'s 'quadD'
 -- should produce value 10 and gradient 7.
 p10 :: IO Bool
 p10 = do

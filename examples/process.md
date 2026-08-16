@@ -1,8 +1,8 @@
-# process-stats ⟜ Traced Mealy Either, encode, scan triangle
+# circuits-stats ⟜ Traced Mealy Either, encode, scan triangle
 
 **ref** ⟜ ~/haskell/circuits/ — Trace, Hyper, Traced
 **ref** ⟜ ~/mg/examples/mealy.md — the isomorphism card (context)
-**note** ⟜ This card predates the `process-stats` rename. The code sketches use the
+**note** ⟜ This card predates the `circuits-stats` rename. The code sketches use the
 old `Mealy` type, but the triangle — `Process` encoded as `Traced Either (->)`,
 `reify . encode = scan` — is the same idea in `Circuit.Process` terms.
 
