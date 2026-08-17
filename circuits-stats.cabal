@@ -53,6 +53,7 @@ common ghc-options-stanza
     -Wincomplete-uni-patterns
     -Wpartial-fields
     -Wredundant-constraints
+    -Wno-pattern-namespace-specifier
 
 library
   import: ghc-options-stanza

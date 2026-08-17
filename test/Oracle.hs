@@ -13,7 +13,7 @@
 -- @circuits-ad@ on a shared quadratic computation.
 module Main where
 
-import Circuit.Diff.Circuit (Diff, quadD, runDiff, data Diff)
+import Circuit.Diff.Circuit (Diff, quadD, runDiff, pattern Diff)
 import Circuit.Process (Process (..), fold, scan)
 import Circuit.Stats
   ( cov,
@@ -88,7 +88,7 @@ p3 = do
       s1 = hand 0 1
       s2 = hand s1 2
       s3 = hand s2 3
-      expected = [s1 / 1, s2 / (r * 1 + 1), s3 / (r * (r * 1 + 1) + 1)]
+      expected = [s1, s2 / (r + 1), s3 / (r * (r + 1) + 1)]
   pure $ and (zipWith (approx 1e-9) ys expected)
 
 -- | P4: covariance of a perfectly correlated pair recovers the covariance.
@@ -127,7 +127,7 @@ p7 = do
       y0 = 1.0
       eulerTraj = euler f y0 (replicate 10 h)
       rk4Traj = Circuit.Stats.ODE.rk4 f y0 (replicate 10 h)
-      expectedEuler = scanl (\y _ -> y + h * y) y0 (replicate 10 ())
+      expectedEuler = take 10 (iterate (\y -> y + h * y) y0)
       eulerError = abs (last eulerTraj - exp 1)
       rk4Error = abs (last rk4Traj - exp 1)
   pure $ and (zipWith (approx 1e-12) eulerTraj expectedEuler) && rk4Error < eulerError / 1000
