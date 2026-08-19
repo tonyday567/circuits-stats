@@ -2,7 +2,6 @@
 /dist-newstyle/
 .DS_Store
 /.hie/
-/cabal.project.local*
 /.hkgr/
 /.ghc.environment.*
 /checklist.org

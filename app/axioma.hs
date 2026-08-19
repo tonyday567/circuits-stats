@@ -32,7 +32,7 @@ import Circuit.Stats.Diff
 import Circuit.Stats.ODE (euler, rk4, vectorField)
 import Circuit.Stats.Quantiles (median, quantiles)
 import Data.List (last, sort)
-import NumHask.Prelude hiding (fold, id, last)
+import NumHask.Prelude hiding (fold, last)
 import System.Exit (exitFailure, exitSuccess)
 import Prelude ()
 
@@ -114,7 +114,7 @@ p5 = do
 p6 :: IO Bool
 p6 = do
   let xs = [1, 2, 4 :: Double]
-      d1 = scan (gdiff (\x -> x) (-)) xs
+      d1 = scan (gdiff id (-)) xs
       d2 = scan (gdiff (const 0) (-)) xs
       d3 = scan (Process (0,) (\(_, prev) a -> (prev, a)) fst) xs
   pure $ d1 == [1, 1, 2] && d2 == [0, 1, 2] && d3 == [0, 1, 2]
@@ -146,7 +146,7 @@ p8 = do
 -- | P9: gradient runners agree with hand-derived references.
 p9 :: IO Bool
 p9 = do
-  let m = Process (\x -> x) (+) (\x -> x) :: Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double)
+  let m = Process id (+) id :: Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double)
       (_, g1) = gradFold m [1, 2, 3 :: Double]
       (_, g2) = diffScan (sqmaDiffProcess 0) [1, 2, 3 :: Double]
       (_, g3) = diffScan (maDiffProcess 0) [1, 2, 3 :: Double]
@@ -162,7 +162,7 @@ p10 = do
   let constD :: Double -> Diff (GradInputs Double) Double
       constD x = Diff $ \_ -> (x, \_ -> zero)
       quadProcess :: Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double)
-      quadProcess = Process (\x -> x) (\s _ -> s) (\s -> constD 2 * s * s + constD 3 * s + constD 5)
+      quadProcess = Process id (\s _ -> s) (\s -> constD 2 * s * s + constD 3 * s + constD 5)
       (yDiff, gDiff) = gradFold quadProcess [1 :: Double]
       (yAD, pbAD) = runDiff quadD 1
       gradDiff = case gDiff 1 of

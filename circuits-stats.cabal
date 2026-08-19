@@ -60,7 +60,6 @@ library
   default-language: GHC2024
   hs-source-dirs: src
   build-depends:
-    adjunctions >=4.0 && <4.5,
     base >=4.14 && <5,
     circuits >=0.2 && <0.5,
     circuits-diff >=0.1 && <0.2,
@@ -74,7 +73,6 @@ library
     profunctors >=5.6.2 && <5.7,
     text >=1.2 && <2.2,
     vector >=0.12.3 && <0.14,
-    vector-algorithms >=0.8.0 && <0.10,
 
   exposed-modules:
     Circuit.Stats
@@ -83,16 +81,14 @@ library
     Circuit.Stats.Quantiles
     Circuit.Stats.Simulate
 
-test-suite circuits-stats-axioma
+executable circuits-stats-axioma
   import: ghc-options-stanza
-  type: exitcode-stdio-1.0
-  main-is: Oracle.hs
-  hs-source-dirs: test
+  hs-source-dirs: app
+  main-is: axioma.hs
   default-language: GHC2024
   build-depends:
     base >=4.14 && <5,
     circuits >=0.2 && <0.5,
     circuits-diff >=0.1 && <0.2,
     circuits-stats,
-    harpie >=0.1 && <0.4,
     numhask >=0.14 && <0.15,
