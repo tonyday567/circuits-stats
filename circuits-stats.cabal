@@ -61,18 +61,18 @@ library
   hs-source-dirs: src
   build-depends:
     base >=4.14 && <5,
-    circuits >=0.2 && <0.5,
+    circuits >=0.3 && <0.4,
     circuits-diff >=0.1 && <0.2,
     circuits-mat >=0.1 && <0.2,
     containers >=0.6 && <0.9,
     dunning-t-digest >=0.1 && <0.2,
-    harpie >=0.1 && <0.4,
+    harpie >=0.3 && <0.4,
     mwc-probability >=2.3.1 && <2.4,
     numhask >=0.14 && <0.15,
     primitive >=0.7.2 && <0.10,
-    profunctors >=5.6.2 && <5.7,
+    profunctors >=5.0 && <5.7,
     text >=1.2 && <2.2,
-    vector >=0.12.3 && <0.14,
+    vector >=0.12 && <0.14,
 
   exposed-modules:
     Circuit.Stats
@@ -88,7 +88,7 @@ executable circuits-stats-axioma
   default-language: GHC2024
   build-depends:
     base >=4.14 && <5,
-    circuits >=0.2 && <0.5,
+    circuits >=0.3 && <0.4,
     circuits-diff >=0.1 && <0.2,
     circuits-stats,
     numhask >=0.14 && <0.15,
