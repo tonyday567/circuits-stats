@@ -33,7 +33,7 @@ module Circuit.Stats.ODE
   )
 where
 
-import Circuit.Diff (Diff, runDiff, pattern Diff)
+import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
 import Circuit.Stats (Process (..))
 import Data.List (scanl')
 import NumHask.Prelude
@@ -50,25 +50,25 @@ import Prelude ()
 
 -- | Lift a pure vector field into a 'Diff' with zero pullback.
 --
--- >>> let f = vectorField (\y -> y) :: Diff Double Double
+-- >>> let f = vectorField (\y -> y) :: Diff' Double Double
 -- >>> fst (runDiff f 2.0)
 -- 2.0
-vectorField :: (Additive s) => (s -> s) -> Diff s s
+vectorField :: (Additive s) => (s -> s) -> Diff' s s
 vectorField f = Diff $ \x -> (f x, const zero)
 
 -- | Evaluate a differentiable vector field at a point, keeping only the
 -- forward value.
-evalField :: Diff s s -> s -> s
+evalField :: Diff' s s -> s -> s
 evalField f x = fst (runDiff f x)
 
 -- | One Euler step: @y' = y + h · f(y)@.
 --
--- >>> let f = vectorField (\y -> y) :: Diff Double Double
+-- >>> let f = vectorField (\y -> y) :: Diff' Double Double
 -- >>> eulerStep f 1.0 0.1
 -- 1.1
 eulerStep ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   h ->
   s
@@ -76,12 +76,12 @@ eulerStep f y h = y + (h *| evalField f y)
 
 -- | One RK4 step.
 --
--- >>> let f = vectorField (\y -> y) :: Diff Double Double
+-- >>> let f = vectorField (\y -> y) :: Diff' Double Double
 -- >>> rk4Step f 1.0 0.1
 -- 1.1051708333333334
 rk4Step ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   h ->
   s
@@ -98,12 +98,12 @@ rk4Step f y h =
 --
 -- The result includes the initial state as the first element.
 --
--- >>> let f = vectorField (\y -> y) :: Diff Double Double
+-- >>> let f = vectorField (\y -> y) :: Diff' Double Double
 -- >>> euler f 1.0 [0.1, 0.1, 0.1]
 -- [1.0,1.1,1.2100000000000002,1.3310000000000002]
 euler ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   [h] ->
   [s]
@@ -115,12 +115,12 @@ euler f = scanl' (eulerStep f)
 --
 -- Harmonic oscillator @x'' = −x@ written as @x' = v, v' = −x@:
 --
--- >>> let f = vectorField (\(EuclideanPair (x, v)) -> EuclideanPair (v, -x)) :: Diff (EuclideanPair Double) (EuclideanPair Double)
+-- >>> let f = vectorField (\(EuclideanPair (x, v)) -> EuclideanPair (v, -x)) :: Diff' (EuclideanPair Double) (EuclideanPair Double)
 -- >>> take 5 (rk4 f (EuclideanPair (1.0, 0.0)) (replicate 40 ((pi :: Double) / 20)))
 -- [EuclideanPair {euclidPair = (1.0,0.0)},EuclideanPair {euclidPair = (0.9876883614494284,-0.1564336685819834)},EuclideanPair {euclidPair = (0.9510568066766389,-0.3090154275945243)},EuclideanPair {euclidPair = (0.8910073220447337,-0.45398824664172294)},EuclideanPair {euclidPair = (0.8090185150345391,-0.5877824515637287)}]
 rk4 ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   [h] ->
   [s]
@@ -132,7 +132,7 @@ rk4 f = scanl' (rk4Step f)
 -- is used only to kick off the machine, so its value is ignored.
 eulerProcess ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   Process h s
 eulerProcess f y0 = Process (const y0) (eulerStep f) id
@@ -143,7 +143,7 @@ eulerProcess f y0 = Process (const y0) (eulerStep f) id
 -- is used only to kick off the machine, so its value is ignored.
 rk4Process ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
-  Diff s s ->
+  Diff' s s ->
   s ->
   Process h s
 rk4Process f y0 = Process (const y0) (rk4Step f) id

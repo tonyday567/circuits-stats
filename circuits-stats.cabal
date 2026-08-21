@@ -16,26 +16,20 @@ description:
   The arrow itself lives in @circuits@; this package is the box library:
   moving averages, standard deviations, quantiles, ODEs, differentiable
   processes, and simulation helpers.
-
   The 'fold' runner is re-exported from "Circuit.Process" and is total
   (returns 'Nothing' on empty input). The @circuits-stats-axioma@ test suite
   contains regression oracles for the statistics, ODE integrators, quantiles,
   and gradient runners.
-
   == Usage
-
   >>> import Circuit.Stats
   >>> import Data.Maybe (fromMaybe)
-
   >>> fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100]
   (91.00265621044142,9.472822805289121)
-
 build-type: Simple
 tested-with:
-  ghc ==9.10.3
+  ghc ==9.10.1
   ghc ==9.12.2
   ghc ==9.14.1
-
 extra-doc-files:
   ChangeLog.md
   readme.md
@@ -47,18 +41,25 @@ source-repository head
 common ghc-options-stanza
   ghc-options:
     -Wall
+    -Wno-unused-imports
     -Wcompat
     -Widentities
     -Wincomplete-record-updates
     -Wincomplete-uni-patterns
     -Wpartial-fields
     -Wredundant-constraints
-    -Wno-pattern-namespace-specifier
 
 library
   import: ghc-options-stanza
   default-language: GHC2024
   hs-source-dirs: src
+  exposed-modules:
+    Circuit.Stats
+    Circuit.Stats.Diff
+    Circuit.Stats.ODE
+    Circuit.Stats.Quantiles
+    Circuit.Stats.Simulate
+
   build-depends:
     base >=4.14 && <5,
     circuits >=0.3 && <0.4,
@@ -74,18 +75,11 @@ library
     text >=1.2 && <2.2,
     vector >=0.12 && <0.14,
 
-  exposed-modules:
-    Circuit.Stats
-    Circuit.Stats.Diff
-    Circuit.Stats.ODE
-    Circuit.Stats.Quantiles
-    Circuit.Stats.Simulate
-
 executable circuits-stats-axioma
   import: ghc-options-stanza
+  default-language: GHC2024
   hs-source-dirs: app
   main-is: axioma.hs
-  default-language: GHC2024
   build-depends:
     base >=4.14 && <5,
     circuits >=0.3 && <0.4,

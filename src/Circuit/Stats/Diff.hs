@@ -64,7 +64,7 @@ module Circuit.Stats.Diff
   )
 where
 
-import Circuit.Diff (Diff, Diff', runDiff, runDiff', pattern Diff)
+import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
 import Circuit.Stats (Averager (..), Process, fold, ma, online, scan, sqma, std, pattern A)
 import Data.List (length)
 import Data.Vector.Unboxed qualified as VU
@@ -112,7 +112,7 @@ instance (Subtractive a) => Subtractive (GradInputs a) where
          in GradInputs (HA.zipWith (-) (HA.pad zero s xs) (HA.pad zero s ys))
 
 -- | A single input variable: the @i@-th element of an @n@-element input.
-variable :: (Additive a) => Int -> Int -> Diff (GradInputs a) a
+variable :: (Additive a) => Int -> Int -> Diff' (GradInputs a) a
 variable n i = Diff $ \s ->
   ( HA.index (unGradInputs s) [i],
     \da -> GradInputs (HA.modify [i] (const da) (HA.konst [n] zero))
@@ -122,7 +122,7 @@ variable n i = Diff $ \s ->
 --
 -- Each variable selects one array element in the forward pass and scatters a
 -- cotangent back to that same position in the backward pass.
-variables :: (Additive a) => [a] -> [Diff (GradInputs a) a]
+variables :: (Additive a) => [a] -> [Diff' (GradInputs a) a]
 variables xs =
   let n = length xs
    in [variable n i | i <- [0 .. n - 1]]
@@ -130,11 +130,11 @@ variables xs =
 -- | Fold a list through a differentiable mealy and return the final output
 -- together with a pullback through the entire fold.
 --
--- >>> let m = PS.asum :: PS.Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
+-- >>> let m = PS.asum :: PS.Process (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
 -- (6.0,[1.0,1.0,1.0])
 gradFold ::
   (Additive a) =>
-  Process (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
+  Process (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   (b, b -> [a])
 gradFold _ [] = error "gradFold: empty list"
@@ -149,11 +149,11 @@ gradFold m xs =
 -- outputs together with a pullback that maps a list of output cotangents
 -- (one per step) to input cotangents.
 --
--- >>> let m = PS.asum :: PS.Process (Diff (GradInputs Double) Double) (Diff (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
+-- >>> let m = PS.asum :: PS.Process (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
 -- [3.0,2.0,1.0]
 gradScan ::
   (Additive a) =>
-  Process (Diff (GradInputs a) a) (Diff (GradInputs a) b) ->
+  Process (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   ([b], [b] -> [a])
 gradScan _ [] = ([], const [])
@@ -170,14 +170,14 @@ gradScan m xs =
 -- | Lift a plain input value into the parameter space of a network mealy.
 --
 -- The value is treated as a constant: its pullback is always zero.
-constant :: (Additive p) => a -> Diff' tag p a
+constant :: (Additive p) => a -> Diff tag p a
 constant x = Diff (const (x, const zero))
 
 -- | Fold a network mealy and return the final output together with a pullback
 -- through the parameters.
 netFold ::
   (Additive p) =>
-  Process (Diff' tag p a) (Diff' tag p b) ->
+  Process (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   (b, b -> p)
@@ -185,55 +185,55 @@ netFold _ _ [] = error "netFold: empty list"
 netFold m p xs =
   case fold m (map constant xs) of
     Nothing -> error "netFold: empty fold"
-    Just ydiff -> runDiff' ydiff p
+    Just ydiff -> runDiff ydiff p
 
 -- | Scan a network mealy and return the per-step outputs together with a
 -- pullback that maps output cotangents to parameter cotangents.
 netScan ::
   (Additive p) =>
-  Process (Diff' tag p a) (Diff' tag p b) ->
+  Process (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   ([b], [b] -> p)
 netScan _ _ [] = ([], const zero)
 netScan m p xs =
   let ys = scan m (map constant xs)
-      pbs = map (`runDiff'` p) ys
+      pbs = map (`runDiff` p) ys
       pullback dbs =
         foldl' (+) zero [pb db | (pb, db) <- zip (snd <$> pbs) dbs]
    in (fst <$> pbs, pullback)
 
--- | 'Circuit.Stats.online' with a 'Diff'' carrier.
+-- | 'Circuit.Stats.online' with a 'Diff' carrier.
 --
 -- The inject and step functions now operate on differentiable values, so the
 -- resulting mealy can be placed inside 'netFold' / 'netScan' and the
 -- parameters inside the carrier are learned by ordinary reverse-mode AD.
 onlineDiff ::
   (Additive p, Subtractive b, Divisive b) =>
-  (Diff' tag p a -> Diff' tag p b) ->
-  (Diff' tag p b -> Diff' tag p b) ->
-  Process (Diff' tag p a) (Diff' tag p b)
+  (Diff tag p a -> Diff tag p b) ->
+  (Diff tag p b -> Diff tag p b) ->
+  Process (Diff tag p a) (Diff tag p b)
 onlineDiff = online
 
 -- | Differentiable moving average with a learnable decay parameter.
 maDiff ::
   (Additive p, Subtractive b, Divisive b) =>
-  Diff' tag p b ->
-  Process (Diff' tag p b) (Diff' tag p b)
+  Diff tag p b ->
+  Process (Diff tag p b) (Diff tag p b)
 maDiff = ma
 
 -- | Differentiable squared moving average with a learnable decay parameter.
 sqmaDiff ::
   (Additive p, Subtractive b, Divisive b) =>
-  Diff' tag p b ->
-  Process (Diff' tag p b) (Diff' tag p b)
+  Diff tag p b ->
+  Process (Diff tag p b) (Diff tag p b)
 sqmaDiff = sqma
 
 -- | Differentiable standard deviation with a learnable decay parameter.
 stdDiff ::
   (Subtractive p, ExpField b) =>
-  Diff' tag p b ->
-  Process (Diff' tag p b) (Diff' tag p b)
+  Diff tag p b ->
+  Process (Diff tag p b) (Diff tag p b)
 stdDiff = std
 
 -- ---------------------------------------------------------------------------
@@ -255,9 +255,9 @@ stdDiff = std
 -- single backward walk, so the cost of a scan gradient is linear in the input
 -- length (no closure-chain blow-up).
 data DiffProcess s a b = DiffProcess
-  { dInject :: Diff a s,
-    dStep :: Diff (s, a) s,
-    dExtract :: Diff s b
+  { dInject :: Diff' a s,
+    dStep :: Diff' (s, a) s,
+    dExtract :: Diff' s b
   }
 
 -- | A 'System'-packaged differentiable Moore machine: state is external.
@@ -266,16 +266,16 @@ data DiffProcess s a b = DiffProcess
 -- @System s (Mono i o)@ packaging (@i@ = output, @o@ = input):
 --
 -- @
--- dsExtract :: Diff s i     -- output from state
--- dsStep    :: Diff (s, o) s  -- next state from state and input
+-- dsExtract :: Diff' s i     -- output from state
+-- dsStep    :: Diff' (s, o) s  -- next state from state and input
 -- @
 --
 -- Pair with an initial state via 'diffSystemAsDiffProcess' to reuse
 -- 'diffScan' \/ 'diffFold'.  Agents that are 'System's sit here for Diff
 -- without pretending to be 'Process' first.
 data DiffSystem s i o = DiffSystem
-  { dsExtract :: Diff s i,
-    dsStep :: Diff (s, o) s
+  { dsExtract :: Diff' s i,
+    dsStep :: Diff' (s, o) s
   }
 
 -- | Bake in @s0@: inject is one step from that state (same as 'systemAsProcess').
@@ -358,7 +358,7 @@ diffBackward ::
   [s] ->
   [s -> (s, a)] ->
   (s -> a) ->
-  Diff s b ->
+  Diff' s b ->
   [b] ->
   [a]
 diffBackward states stepPBs injPB ext dys =
@@ -408,8 +408,8 @@ diffFold m xs =
 -- | 'Circuit.Stats.online' as a reverse-step 'DiffProcess'.
 onlineDiffProcess ::
   (Subtractive b, Divisive b) =>
-  Diff a b ->
-  Diff b b ->
+  Diff' a b ->
+  Diff' b b ->
   DiffProcess (Averager b b) a b
 onlineDiffProcess f g = DiffProcess inject step extract
   where
@@ -558,7 +558,7 @@ instance (Subtractive a, Subtractive b) => Subtractive (DiffState a b) where
 diffDiff ::
   (Additive a, Additive b) =>
   a ->
-  Diff (a, a) b ->
+  Diff' (a, a) b ->
   DiffProcess (DiffState a b) a b
 diffDiff a0 f = DiffProcess inject step extract
   where
