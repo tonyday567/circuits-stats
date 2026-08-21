@@ -46,7 +46,7 @@ import Prelude ()
 -- >>> import NumHask.Prelude
 -- >>> import Circuit.Stats.ODE
 -- >>> import NumHask.Algebra.Metric (EuclideanPair (..))
--- >>> import Circuit.Diff (Diff, runDiff)
+-- >>> import Circuit.Diff (Diff, Diff', runDiff)
 
 -- | Lift a pure vector field into a 'Diff' with zero pullback.
 --
