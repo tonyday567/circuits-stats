@@ -34,7 +34,6 @@ import Circuit.Stats.Quantiles (median, quantiles)
 import Data.List (last, sort)
 import NumHask.Prelude hiding (fold, last)
 import System.Exit (exitFailure, exitSuccess)
-import Prelude ()
 
 main :: IO ()
 main = do

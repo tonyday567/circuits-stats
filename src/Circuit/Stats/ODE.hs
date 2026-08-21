@@ -37,7 +37,6 @@ import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
 import Circuit.Stats (Process (..))
 import Data.List (scanl')
 import NumHask.Prelude
-import Prelude ()
 
 -- $setup
 --

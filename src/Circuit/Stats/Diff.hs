@@ -71,7 +71,6 @@ import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array)
 import Harpie.Array qualified as HA
 import NumHask.Prelude hiding (fold, length)
-import Prelude ()
 
 -- $setup
 -- >>> import Circuit.Stats qualified as PS
