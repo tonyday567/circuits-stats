@@ -118,4 +118,4 @@ digitize r qs = Process inject step extract
 -- | transform an input to a [0,1] signal, via digitalization.
 signalize :: Double -> [Double] -> Process Double Double
 signalize r qs' =
-  (\x -> fromIntegral x / fromIntegral (length qs' + 1)) <$> digitize r qs'
+  after (digitize r qs') (\x -> fromIntegral x / fromIntegral (length qs' + 1))

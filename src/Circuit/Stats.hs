@@ -19,6 +19,8 @@ module Circuit.Stats
   ( -- * Process re-export
     Process (..),
     dipure,
+    before,
+    after,
     scan,
     fold,
     Averager (..),
@@ -63,12 +65,11 @@ module Circuit.Stats
   )
 where
 
-import Circuit.Category (id)
+import Circuit.Category (id, (.))
 import Circuit.Mat.Field (inverseM)
 import Circuit.Process (Process (..), fold, scan)
 import Control.Exception
 import Data.Map qualified as Map
-import Data.Profunctor (lmap)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
@@ -132,6 +133,40 @@ instance Exception ProcessStatsError
 dipure :: (a -> a -> a) -> Process a a
 dipure f = Process id f id
 
+-- | Precompose a pure function before a process.
+before :: Process b c -> (a -> b) -> Process a c
+before (Process i st ex) f = Process (i . f) (\s a -> st s (f a)) ex
+{-# INLINEABLE before #-}
+
+-- | Postcompose a pure function after a process.
+after :: Process a b -> (b -> c) -> Process a c
+after (Process i st ex) f = Process i st (f . ex)
+{-# INLINEABLE after #-}
+
+-- | Run two processes on the same input and combine their outputs.
+parWith :: (x -> y -> z) -> Process a x -> Process a y -> Process a z
+parWith combine (Process i1 st1 ex1) (Process i2 st2 ex2) =
+  Process (\a -> (i1 a, i2 a)) (\(s1, s2) a -> (st1 s1 a, st2 s2 a)) (\(s1, s2) -> combine (ex1 s1) (ex2 s2))
+{-# INLINEABLE parWith #-}
+
+-- | Run three processes on the same input and combine their outputs.
+parWith3 :: (x -> y -> z -> w) -> Process a x -> Process a y -> Process a z -> Process a w
+parWith3 combine (Process i1 st1 ex1) (Process i2 st2 ex2) (Process i3 st3 ex3) =
+  Process
+    (\a -> (i1 a, i2 a, i3 a))
+    (\(s1, s2, s3) a -> (st1 s1 a, st2 s2 a, st3 s3 a))
+    (\(s1, s2, s3) -> combine (ex1 s1) (ex2 s2) (ex3 s3))
+{-# INLINEABLE parWith3 #-}
+
+-- | Run four processes on the same input and combine their outputs.
+parWith4 :: (w -> x -> y -> z -> r) -> Process a w -> Process a x -> Process a y -> Process a z -> Process a r
+parWith4 combine (Process i1 st1 ex1) (Process i2 st2 ex2) (Process i3 st3 ex3) (Process i4 st4 ex4) =
+  Process
+    (\a -> (i1 a, i2 a, i3 a, i4 a))
+    (\(s1, s2, s3, s4) a -> (st1 s1 a, st2 s2 a, st3 s3 a, st4 s4 a))
+    (\(s1, s2, s3, s4) -> combine (ex1 s1) (ex2 s2) (ex3 s3) (ex4 s4))
+{-# INLINEABLE parWith4 #-}
+
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
   { sumCount :: (a, b)
@@ -191,9 +226,9 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 --
 -- > sqma r = online (\x -> x * x) (* r)
 --
--- Applicative-style exponentially-weighted standard deviation computation:
+-- Parallel-style exponentially-weighted standard deviation computation:
 --
--- > std r = (\s ss -> sqrt (ss - s ** 2)) <$> ma r <*> sqma r
+-- > std r = parWith (\s ss -> sqrt (ss - s ** 2)) (ma r) (sqma r)
 online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Process a b
 online f g = Process intract step av
   where
@@ -233,9 +268,9 @@ sqma r = online (\x -> x * x) (* r)
 
 -- | standard deviation
 --
--- The construction of standard deviation, using the Applicative instance of a 'Process':
+-- The construction of standard deviation, combining 'ma' and 'sqma' in parallel:
 --
--- > (\s ss -> sqrt (ss - s ** (one+one))) <$> ma r <*> sqma r
+-- > std r = parWith (\s ss -> sqrt (ss - s ** (one+one))) (ma r) (sqma r)
 --
 -- The average deviation of the numbers 1..1000 is about 1 / sqrt 12 * 1000
 -- <https://en.wikipedia.org/wiki/Uniform_distribution_(continuous)#Standard_uniform>
@@ -251,7 +286,7 @@ sqma r = online (\x -> x * x) (* r)
 -- >>> fold' (std 1) xs0
 -- 1.0126438036262801
 std :: (ExpField a) => a -> Process a a
-std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
+std r = parWith (\s ss -> sqrt (ss - s ** (one + one))) (ma r) (sqma r)
 {-# INLINEABLE std #-}
 
 -- | The covariance of a tuple given an underlying central tendency fold.
@@ -260,7 +295,11 @@ std r = (\s ss -> sqrt (ss - s ** (one + one))) <$> ma r <*> sqma r
 -- 0.7818936662586868
 cov :: (Field a) => Process a a -> Process (a, a) a
 cov m =
-  (\xy x' y' -> xy - x' * y') <$> lmap (uncurry (*)) m <*> lmap fst m <*> lmap snd m
+  parWith3
+    (\xy x' y' -> xy - x' * y')
+    (before m (uncurry (*)))
+    (before m fst)
+    (before m snd)
 {-# INLINEABLE cov #-}
 
 -- | correlation of a tuple, specialised to Guassian
@@ -269,10 +308,11 @@ cov m =
 -- 0.7978347126677433
 corrGauss :: (ExpField a) => a -> Process (a, a) a
 corrGauss r =
-  (\cov' stdx stdy -> cov' / (stdx * stdy))
-    <$> cov (ma r)
-    <*> lmap fst (std r)
-    <*> lmap snd (std r)
+  parWith3
+    (\cov' stdx stdy -> cov' / (stdx * stdy))
+    (cov (ma r))
+    (before (std r) fst)
+    (before (std r) snd)
 {-# INLINEABLE corrGauss #-}
 
 -- | a generalised version of correlation of a tuple
@@ -283,10 +323,11 @@ corrGauss r =
 -- > corr (ma r) (std r) == corrGauss r
 corr :: (ExpField a) => Process a a -> Process a a -> Process (a, a) a
 corr central deviation =
-  (\cov' stdx stdy -> cov' / (stdx * stdy))
-    <$> cov central
-    <*> lmap fst deviation
-    <*> lmap snd deviation
+  parWith3
+    (\cov' stdx stdy -> cov' / (stdx * stdy))
+    (cov central)
+    (before deviation fst)
+    (before deviation snd)
 {-# INLINEABLE corr #-}
 
 -- | The beta in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
@@ -305,11 +346,12 @@ corr central deviation =
 -- 0.999747321294513
 beta1 :: (ExpField a) => Process a a -> Process (a, a) a
 beta1 m =
-  (\xy x' y' x2 -> (xy - x' * y') / (x2 - x' * x'))
-    <$> lmap (uncurry (*)) m
-    <*> lmap fst m
-    <*> lmap snd m
-    <*> lmap (\(x, _) -> x * x) m
+  parWith4
+    (\xy x' y' x2 -> (xy - x' * y') / (x2 - x' * x'))
+    (before m (uncurry (*)))
+    (before m fst)
+    (before m snd)
+    (before m (\(x, _) -> x * x))
 {-# INLINEABLE beta1 #-}
 
 -- | The alpha in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
@@ -325,7 +367,7 @@ beta1 m =
 -- >>> fold' (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- 1.3680496627365146e-2
 alpha1 :: (ExpField a) => Process a a -> Process (a, a) a
-alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
+alpha1 m = parWith3 (\x b y -> y - b * x) (before m fst) (beta1 m) (before m snd)
 {-# INLINEABLE alpha1 #-}
 
 -- | The (alpha, beta) tuple in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
@@ -333,7 +375,7 @@ alpha1 m = (\x b y -> y - b * x) <$> lmap fst m <*> beta1 m <*> lmap snd m
 -- >>> fold' (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- (1.3680496627365146e-2,0.4997473212944953)
 reg1 :: (ExpField a) => Process a a -> Process (a, a) (a, a)
-reg1 m = (,) <$> alpha1 m <*> beta1 m
+reg1 m = parWith (,) (alpha1 m) (beta1 m)
 
 data RegressionState (n :: Nat) a = RegressionState
   { _xx :: F.Array Vector '[n, n] a,
@@ -383,7 +425,12 @@ rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') 
 
 -- | alpha in a multiple regression
 alpha :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) a
-alpha r = (\xs b y -> y - sum (F.zipWith (*) b xs)) <$> lmap fst (arrayify $ ma r) <*> beta r <*> lmap snd (ma r)
+alpha r =
+  parWith3
+    (\xs b y -> y - sum (F.zipWith (*) b xs))
+    (before (arrayify (ma r)) fst)
+    (beta r)
+    (before (ma r) snd)
 {-# INLINEABLE alpha #-}
 
 arrayify :: (S.KnownNats s) => Process a b -> Process (F.Array Vector s a) (F.Array Vector s b)
@@ -400,7 +447,7 @@ arrayify (Process sExtract sStep sInject) = Process extract step inject
 -- >>> fold' (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
 reg :: (ExpField a, KnownNat n) => a -> Process (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
-reg r = (,) <$> beta r <*> alpha r
+reg r = parWith (,) (beta r) (alpha r)
 {-# INLINEABLE reg #-}
 
 -- | accumulated sum
@@ -436,7 +483,7 @@ delay1 x0 = Process (x0,) (\(_, x) a -> (x, a)) fst
 --
 -- Autocorrelation example:
 --
--- > scan (((,) <$> id <*> delay [0]) >>> beta (ma 0.99)) xs0
+-- > scan (parWith (,) id (delay [0]) >>> beta (ma 0.99)) xs0
 delay ::
   -- | initial statistical values, delay equals length
   [a] ->
@@ -458,7 +505,7 @@ window n = Process Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 
 -- | binomial operator applied to last and this value
 diff :: (a -> a -> b) -> Process a b
-diff f = f <$> id <*> delay1 undefined
+diff f = Process (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
 
 -- | generalised diff function.
 gdiff :: (a -> b) -> (a -> a -> b) -> Process a b
@@ -495,7 +542,7 @@ data Medianer a b = Medianer
 -- | onlineL1' takes a function and turns it into a `Process` where the step is an incremental update of an (isomorphic) median statistic.
 onlineL1 ::
   (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Process a b
-onlineL1 i d f g = snd <$> Process inject step extract
+onlineL1 i d f g = Process inject step extract
   where
     inject a = let s = abs (f a) in Medianer s one (i * s)
     step (Medianer s c m) a =
@@ -508,7 +555,7 @@ onlineL1 i d f g = snd <$> Process inject step extract
           if c == zero
             then one
             else c
-    extract (Medianer s c m) = (s / c, m)
+    extract (Medianer _ _ m) = m
     sign' a m
       | f a > m = one
       | f a < m = negate one
