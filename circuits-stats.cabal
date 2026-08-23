@@ -25,11 +25,13 @@ description:
   >>> import Data.Maybe (fromMaybe)
   >>> fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100]
   (91.00265621044142,9.472822805289121)
+
 build-type: Simple
 tested-with:
   ghc ==9.10.1
   ghc ==9.12.2
   ghc ==9.14.1
+
 extra-doc-files:
   ChangeLog.md
   readme.md
