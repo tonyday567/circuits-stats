@@ -67,7 +67,7 @@ where
 
 import Circuit.Category (id, (.))
 import Circuit.Mat.Field (inverseM)
-import Circuit.Process (Process (..), fold, scan)
+import Circuit.Process (Process (..), after, before, fold, parWith, parWith3, parWith4, scan)
 import Control.Exception
 import Data.Map qualified as Map
 import Data.Sequence (Seq)
@@ -132,40 +132,6 @@ instance Exception ProcessStatsError
 -- | Create a 'Process' from a (pure) binary operation.
 dipure :: (a -> a -> a) -> Process a a
 dipure f = Process id f id
-
--- | Precompose a pure function before a process.
-before :: Process b c -> (a -> b) -> Process a c
-before (Process i st ex) f = Process (i . f) (\s a -> st s (f a)) ex
-{-# INLINEABLE before #-}
-
--- | Postcompose a pure function after a process.
-after :: Process a b -> (b -> c) -> Process a c
-after (Process i st ex) f = Process i st (f . ex)
-{-# INLINEABLE after #-}
-
--- | Run two processes on the same input and combine their outputs.
-parWith :: (x -> y -> z) -> Process a x -> Process a y -> Process a z
-parWith combine (Process i1 st1 ex1) (Process i2 st2 ex2) =
-  Process (\a -> (i1 a, i2 a)) (\(s1, s2) a -> (st1 s1 a, st2 s2 a)) (\(s1, s2) -> combine (ex1 s1) (ex2 s2))
-{-# INLINEABLE parWith #-}
-
--- | Run three processes on the same input and combine their outputs.
-parWith3 :: (x -> y -> z -> w) -> Process a x -> Process a y -> Process a z -> Process a w
-parWith3 combine (Process i1 st1 ex1) (Process i2 st2 ex2) (Process i3 st3 ex3) =
-  Process
-    (\a -> (i1 a, i2 a, i3 a))
-    (\(s1, s2, s3) a -> (st1 s1 a, st2 s2 a, st3 s3 a))
-    (\(s1, s2, s3) -> combine (ex1 s1) (ex2 s2) (ex3 s3))
-{-# INLINEABLE parWith3 #-}
-
--- | Run four processes on the same input and combine their outputs.
-parWith4 :: (w -> x -> y -> z -> r) -> Process a w -> Process a x -> Process a y -> Process a z -> Process a r
-parWith4 combine (Process i1 st1 ex1) (Process i2 st2 ex2) (Process i3 st3 ex3) (Process i4 st4 ex4) =
-  Process
-    (\a -> (i1 a, i2 a, i3 a, i4 a))
-    (\(s1, s2, s3, s4) a -> (st1 s1 a, st2 s2 a, st3 s3 a, st4 s4 a))
-    (\(s1, s2, s3, s4) -> combine (ex1 s1) (ex2 s2) (ex3 s3) (ex4 s4))
-{-# INLINEABLE parWith4 #-}
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
@@ -434,11 +400,11 @@ alpha r =
 {-# INLINEABLE alpha #-}
 
 arrayify :: (S.KnownNats s) => Process a b -> Process (F.Array Vector s a) (F.Array Vector s b)
-arrayify (Process sExtract sStep sInject) = Process extract step inject
+arrayify (Process sInject sStep sExtract) = Process inject step extract
   where
-    extract = fmap sExtract
-    step = F.zipWith sStep
     inject = fmap sInject
+    step = F.zipWith sStep
+    extract = fmap sExtract
 
 -- | multiple regression
 --
@@ -525,11 +491,11 @@ sumM = Process (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) i
 
 -- | Convert a Process to a Process operating on lists.
 listify :: Process a b -> Process [a] [b]
-listify (Process sExtract sStep sInject) = Process extract step inject
+listify (Process sInject sStep sExtract) = Process inject step extract
   where
-    extract = fmap sExtract
-    step = zipWith sStep
     inject = fmap sInject
+    step = zipWith sStep
+    extract = fmap sExtract
 
 -- | A rough Median.
 -- The average absolute value of the stat is used to callibrate estimate drift towards the median
