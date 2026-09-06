@@ -1,6 +1,6 @@
 {-# LANGUAGE RebindableSyntax #-}
 
--- | Process quantile statistics.
+-- | Mealy quantile statistics.
 module Circuit.Stats.Quantiles
   ( median,
     quantiles,
@@ -38,9 +38,9 @@ tdigestDelta = 50
 emptyOnlineTDigest :: Double -> OnlineTDigest
 emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
 
--- | Process quantiles based on the t-digest library.
-quantiles :: Double -> [Double] -> Process Double [Double]
-quantiles r qs = Process inject step extract
+-- | Mealy quantiles based on the t-digest library.
+quantiles :: Double -> [Double] -> Mealy Double [Double]
+quantiles r qs = Mealy inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -48,11 +48,11 @@ quantiles r qs = Process inject step extract
       where
         (OnlineTDigest t _ _) = onlineForceCompress x
 
--- | Process median using the t-digest algorithm.
+-- | Mealy median using the t-digest algorithm.
 --
 -- The t-digest algorithm works best at extremes and can be unreliable in the centre.
-median :: Double -> Process Double Double
-median r = Process inject step extract
+median :: Double -> Mealy Double Double
+median r = Mealy inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -96,8 +96,8 @@ onlineForceCompress (OnlineTDigest t n r) = OnlineTDigest t' 0 r
 -- * 0 if the current value is less than the current process median.
 --
 -- * 1 if the current value is greater than the current process median.
-digitize :: Double -> [Double] -> Process Double Int
-digitize r qs = Process inject step extract
+digitize :: Double -> [Double] -> Mealy Double Int
+digitize r qs = Mealy inject step extract
   where
     step (x, _) a = (onlineInsert a x, a)
     inject a = (onlineInsert a (emptyOnlineTDigest r), a)
@@ -107,7 +107,7 @@ digitize r qs = Process inject step extract
         (OnlineTDigest t _ _) = onlineForceCompress x
         bucket' xs l' =
           fromMaybe 0
-            . fold (Process id (+) id)
+            . fold (Mealy id (+) id)
             $ ( \x' ->
                   if x' > l'
                     then 0
@@ -116,6 +116,6 @@ digitize r qs = Process inject step extract
               <$> xs
 
 -- | transform an input to a [0,1] signal, via digitalization.
-signalize :: Double -> [Double] -> Process Double Double
+signalize :: Double -> [Double] -> Mealy Double Double
 signalize r qs' =
   after (digitize r qs') (\x -> fromIntegral x / fromIntegral (length qs' + 1))
