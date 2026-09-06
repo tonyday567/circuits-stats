@@ -1,6 +1,6 @@
 {-# LANGUAGE RebindableSyntax #-}
 
--- | Mealy quantile statistics.
+-- | Moore quantile statistics.
 module Circuit.Stats.Quantiles
   ( median,
     quantiles,
@@ -38,9 +38,9 @@ tdigestDelta = 50
 emptyOnlineTDigest :: Double -> OnlineTDigest
 emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
 
--- | Mealy quantiles based on the t-digest library.
-quantiles :: Double -> [Double] -> Mealy Double [Double]
-quantiles r qs = Mealy inject step extract
+-- | Moore quantiles based on the t-digest library.
+quantiles :: Double -> [Double] -> Moore Double [Double]
+quantiles r qs = Moore inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -48,11 +48,11 @@ quantiles r qs = Mealy inject step extract
       where
         (OnlineTDigest t _ _) = onlineForceCompress x
 
--- | Mealy median using the t-digest algorithm.
+-- | Moore median using the t-digest algorithm.
 --
 -- The t-digest algorithm works best at extremes and can be unreliable in the centre.
-median :: Double -> Mealy Double Double
-median r = Mealy inject step extract
+median :: Double -> Moore Double Double
+median r = Moore inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -96,8 +96,8 @@ onlineForceCompress (OnlineTDigest t n r) = OnlineTDigest t' 0 r
 -- * 0 if the current value is less than the current process median.
 --
 -- * 1 if the current value is greater than the current process median.
-digitize :: Double -> [Double] -> Mealy Double Int
-digitize r qs = Mealy inject step extract
+digitize :: Double -> [Double] -> Moore Double Int
+digitize r qs = Moore inject step extract
   where
     step (x, _) a = (onlineInsert a x, a)
     inject a = (onlineInsert a (emptyOnlineTDigest r), a)
@@ -107,7 +107,7 @@ digitize r qs = Mealy inject step extract
         (OnlineTDigest t _ _) = onlineForceCompress x
         bucket' xs l' =
           fromMaybe 0
-            . fold (Mealy id (+) id)
+            . fold (Moore id (+) id)
             $ ( \x' ->
                   if x' > l'
                     then 0
@@ -116,6 +116,6 @@ digitize r qs = Mealy inject step extract
               <$> xs
 
 -- | transform an input to a [0,1] signal, via digitalization.
-signalize :: Double -> [Double] -> Mealy Double Double
+signalize :: Double -> [Double] -> Moore Double Double
 signalize r qs' =
   after (digitize r qs') (\x -> fromIntegral x / fromIntegral (length qs' + 1))

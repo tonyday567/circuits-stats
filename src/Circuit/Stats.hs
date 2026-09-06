@@ -6,18 +6,18 @@
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
 -- | Streaming statistics and state-machine specialisations built on
--- 'Circuit.Mealy.Mealy'.
+-- 'Circuit.Moore.Moore'.
 --
--- The 'Mealy' carrier itself lives in "Circuit.Mealy"; this module is the
+-- The 'Moore' carrier itself lives in "Circuit.Moore"; this module is the
 -- box library: moving averages, standard deviations, regression, quantiles,
 -- delays, and related streaming combinators.
 --
--- 'fold' is re-exported from "Circuit.Mealy" and is total (it returns
+-- 'fold' is re-exported from "Circuit.Moore" and is total (it returns
 -- 'Nothing' for an empty list). The statistical implementations in this module
 -- are the canonical @circuits-stats@ reference boxes.
 module Circuit.Stats
-  ( -- * Mealy re-export
-    Mealy (..),
+  ( -- * Moore re-export
+    Moore (..),
     dipure,
     before,
     after,
@@ -67,7 +67,7 @@ where
 
 import Circuit.Category (id, (.))
 import Circuit.Mat.Field (inverseM)
-import Circuit.Process (Mealy (..), after, before, fold, scan)
+import Circuit.Process (Moore (..), after, before, fold, scan)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
 import Data.Map qualified as Map
@@ -83,7 +83,7 @@ import NumHask.Prelude hiding (asum, diff, fold, id, last, (.), (|*))
 
 
 -- | Run four mealy machines on the same input and combine their outputs.
-parWith4 :: (w -> x -> y -> z -> r) -> Mealy a w -> Mealy a x -> Mealy a y -> Mealy a z -> Mealy a r
+parWith4 :: (w -> x -> y -> z -> r) -> Moore a w -> Moore a x -> Moore a y -> Moore a z -> Moore a r
 parWith4 f p1 p2 p3 p4 = liftA2 (\w (x, y, z) -> f w x y z) p1 (liftA3 (,,) p2 p3 p4)
 
 -- | Scale a functorial container by a scalar.
@@ -135,9 +135,9 @@ newtype ProcessStatsError = ProcessStatsError {processStatsErrorMessage :: Text}
 
 instance Exception ProcessStatsError
 
--- | Create a 'Mealy' from a (pure) binary operation.
-dipure :: (a -> a -> a) -> Mealy a a
-dipure f = Mealy id f id
+-- | Create a 'Moore' from a (pure) binary operation.
+dipure :: (a -> a -> a) -> Moore a a
+dipure f = Moore id f id
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
@@ -182,7 +182,7 @@ av (A s c) = s / c
 av_ :: (Eq a, Additive a, Divisive a) => Averager a a -> a -> a
 av_ (A s c) def = bool def (s / c) (c == zero)
 
--- | @online f g@ is a 'Mealy' where f is a transformation of the data and
+-- | @online f g@ is a 'Moore' where f is a transformation of the data and
 -- g is a decay function (usually convergent to zero) applied at each step.
 --
 -- > online id id == av
@@ -201,8 +201,8 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 -- Parallel-style exponentially-weighted standard deviation computation:
 --
 -- > std r = liftA2 (\s ss -> sqrt (ss - s ** 2)) (ma r) (sqma r)
-online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Mealy a b
-online f g = Mealy intract step av
+online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Moore a b
+online f g = Moore intract step av
   where
     intract a = A (f a) one
     step (A s c) a =
@@ -219,7 +219,7 @@ online f g = Mealy intract step av
 --
 -- >>> fold' (ma 0.99) xs0
 -- 9.713356299018187e-2
-ma :: (Divisive a, Additive a) => a -> Mealy a a
+ma :: (Divisive a, Additive a) => a -> Moore a a
 ma r = online id (* r)
 {-# INLINEABLE ma #-}
 
@@ -227,14 +227,14 @@ ma r = online id (* r)
 --
 -- >>> fold' (absma 1) xs0
 -- 0.8075705557429647
-absma :: (Divisive a, Absolute a) => a -> Mealy a a
+absma :: (Divisive a, Absolute a) => a -> Moore a a
 absma r = online abs (* r)
 {-# INLINEABLE absma #-}
 
 -- | average square
 --
 -- > fold' (ma r) . fmap (**2) == fold' (sqma r)
-sqma :: (Divisive a, Additive a) => a -> Mealy a a
+sqma :: (Divisive a, Additive a) => a -> Moore a a
 sqma r = online (\x -> x * x) (* r)
 {-# INLINEABLE sqma #-}
 
@@ -257,7 +257,7 @@ sqma r = online (\x -> x * x) (* r)
 --
 -- >>> fold' (std 1) xs0
 -- 1.0126438036262801
-std :: (ExpField a) => a -> Mealy a a
+std :: (ExpField a) => a -> Moore a a
 std r = liftA2 (\s ss -> sqrt (ss - s ** (one + one))) (ma r) (sqma r)
 {-# INLINEABLE std #-}
 
@@ -265,7 +265,7 @@ std r = liftA2 (\s ss -> sqrt (ss - s ** (one + one))) (ma r) (sqma r)
 --
 -- >>> fold' (cov (ma 1)) xsp
 -- 0.7818936662586868
-cov :: (Field a) => Mealy a a -> Mealy (a, a) a
+cov :: (Field a) => Moore a a -> Moore (a, a) a
 cov m =
   liftA3
     (\xy x' y' -> xy - x' * y')
@@ -278,7 +278,7 @@ cov m =
 --
 -- >>> fold' (corrGauss 1) xsp
 -- 0.7978347126677433
-corrGauss :: (ExpField a) => a -> Mealy (a, a) a
+corrGauss :: (ExpField a) => a -> Moore (a, a) a
 corrGauss r =
   liftA3
     (\cov' stdx stdy -> cov' / (stdx * stdy))
@@ -293,7 +293,7 @@ corrGauss r =
 -- 0.7978347126677433
 --
 -- > corr (ma r) (std r) == corrGauss r
-corr :: (ExpField a) => Mealy a a -> Mealy a a -> Mealy (a, a) a
+corr :: (ExpField a) => Moore a a -> Moore a a -> Moore (a, a) a
 corr central deviation =
   liftA3
     (\cov' stdx stdy -> cov' / (stdx * stdy))
@@ -304,7 +304,7 @@ corr central deviation =
 
 -- | The beta in a simple linear regression of an (independent variable, single dependent variable) tuple given an underlying central tendency fold.
 --
--- This is a generalisation of the classical regression formula, where averages are replaced by 'Mealy' statistics.
+-- This is a generalisation of the classical regression formula, where averages are replaced by 'Moore' statistics.
 --
 -- \[
 -- \begin{align}
@@ -316,7 +316,7 @@ corr central deviation =
 --
 -- >>> fold' (beta1 (ma 1)) $ zipWith (\x y -> (y, x + y)) xs0 xs1
 -- 0.999747321294513
-beta1 :: (ExpField a) => Mealy a a -> Mealy (a, a) a
+beta1 :: (ExpField a) => Moore a a -> Moore (a, a) a
 beta1 m =
   parWith4
     (\xy x' y' x2 -> (xy - x' * y') / (x2 - x' * x'))
@@ -338,7 +338,7 @@ beta1 m =
 --
 -- >>> fold' (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- 1.3680496627365146e-2
-alpha1 :: (ExpField a) => Mealy a a -> Mealy (a, a) a
+alpha1 :: (ExpField a) => Moore a a -> Moore (a, a) a
 alpha1 m = liftA3 (\x b y -> y - b * x) (before m fst) (beta1 m) (before m snd)
 {-# INLINEABLE alpha1 #-}
 
@@ -346,7 +346,7 @@ alpha1 m = liftA3 (\x b y -> y - b * x) (before m fst) (beta1 m) (before m snd)
 --
 -- >>> fold' (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- (1.3680496627365146e-2,0.4997473212944953)
-reg1 :: (ExpField a) => Mealy a a -> Mealy (a, a) (a, a)
+reg1 :: (ExpField a) => Moore a a -> Moore (a, a) (a, a)
 reg1 m = liftA2 (,) (alpha1 m) (beta1 m)
 
 data RegressionState (n :: Nat) a = RegressionState
@@ -375,8 +375,8 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
-beta :: (ExpField a, KnownNat n) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
-beta r = Mealy inject step extract
+beta :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
+beta r = Moore inject step extract
   where
     -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
     extract (A (RegressionState xx x xy y) c) =
@@ -396,7 +396,7 @@ rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') 
     d s s' = r * s + s'
 
 -- | alpha in a multiple regression
-alpha :: (ExpField a, KnownNat n) => a -> Mealy (F.Array Vector '[n] a, a) a
+alpha :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) a
 alpha r =
   liftA3
     (\xs b y -> y - sum (F.zipWith (*) b xs))
@@ -405,8 +405,8 @@ alpha r =
     (before (ma r) snd)
 {-# INLINEABLE alpha #-}
 
-arrayify :: (S.KnownNats s) => Mealy a b -> Mealy (F.Array Vector s a) (F.Array Vector s b)
-arrayify (Mealy sInject sStep sExtract) = Mealy inject step extract
+arrayify :: (S.KnownNats s) => Moore a b -> Moore (F.Array Vector s a) (F.Array Vector s b)
+arrayify (Moore sInject sStep sExtract) = Moore inject step extract
   where
     inject = fmap sInject
     step = F.zipWith sStep
@@ -418,29 +418,29 @@ arrayify (Mealy sInject sStep sExtract) = Mealy inject step extract
 -- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
-reg :: (ExpField a, KnownNat n) => a -> Mealy (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
+reg :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = liftA2 (,) (beta r) (alpha r)
 {-# INLINEABLE reg #-}
 
 -- | accumulated sum
-asum :: (Additive a) => Mealy a a
-asum = Mealy id (+) id
+asum :: (Additive a) => Moore a a
+asum = Moore id (+) id
 
--- | constant Mealy
-aconst :: b -> Mealy a b
-aconst b = Mealy (const ()) (\_ _ -> ()) (const b)
+-- | constant Moore
+aconst :: b -> Moore a b
+aconst b = Moore (const ()) (\_ _ -> ()) (const b)
 
 -- | most recent value
-last :: Mealy a a
-last = Mealy id (\_ a -> a) id
+last :: Moore a a
+last = Moore id (\_ a -> a) id
 
 -- | most recent value if it exists, previous value otherwise.
-maybeLast :: a -> Mealy (Maybe a) a
-maybeLast def = Mealy (fromMaybe def) fromMaybe id
+maybeLast :: a -> Moore (Maybe a) a
+maybeLast def = Moore (fromMaybe def) fromMaybe id
 
 -- | delay input values by 1
-delay1 :: a -> Mealy a a
-delay1 x0 = Mealy (x0,) (\(_, x) a -> (x, a)) fst
+delay1 :: a -> Moore a a
+delay1 x0 = Moore (x0,) (\(_, x) a -> (x, a)) fst
 
 -- | delays values by n steps
 --
@@ -459,8 +459,8 @@ delay1 x0 = Mealy (x0,) (\(_, x) a -> (x, a)) fst
 delay ::
   -- | initial statistical values, delay equals length
   [a] ->
-  Mealy a a
-delay x0 = Mealy inject step extract
+  Moore a a
+delay x0 = Moore inject step extract
   where
     inject a = Seq.fromList x0 Seq.|> a
     extract :: Seq a -> a
@@ -471,33 +471,33 @@ delay x0 = Mealy inject step extract
     step (_ Seq.:<| xs) a = xs Seq.|> a
 
 -- | a moving window of a's, most recent at the front of the sequence
-window :: Int -> Mealy a (Seq.Seq a)
-window n = Mealy Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
+window :: Int -> Moore a (Seq.Seq a)
+window n = Moore Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 {-# INLINEABLE window #-}
 
 -- | binomial operator applied to last and this value
-diff :: (a -> a -> b) -> Mealy a b
-diff f = Mealy (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
+diff :: (a -> a -> b) -> Moore a b
+diff f = Moore (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
 
 -- | generalised diff function.
-gdiff :: (a -> b) -> (a -> a -> b) -> Mealy a b
-gdiff d0 d = Mealy (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
+gdiff :: (a -> b) -> (a -> a -> b) -> Moore a b
+gdiff d0 d = Moore (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
 
 -- | Unchanged since last time.
-same :: (Eq b) => (a -> b) -> Mealy a Bool
-same b = Mealy (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
+same :: (Eq b) => (a -> b) -> Moore a Bool
+same b = Moore (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
 
 -- | Count observed values
-countM :: (Ord a) => Mealy a (Map.Map a Int)
-countM = Mealy (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
+countM :: (Ord a) => Moore a (Map.Map a Int)
+countM = Moore (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
 
 -- | Sum values of a key-value pair.
-sumM :: (Ord a, Additive b) => Mealy (a, b) (Map.Map a b)
-sumM = Mealy (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
+sumM :: (Ord a, Additive b) => Moore (a, b) (Map.Map a b)
+sumM = Moore (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
 
--- | Convert a Mealy to a Mealy operating on lists.
-listify :: Mealy a b -> Mealy [a] [b]
-listify (Mealy sInject sStep sExtract) = Mealy inject step extract
+-- | Convert a Moore to a Moore operating on lists.
+listify :: Moore a b -> Moore [a] [b]
+listify (Moore sInject sStep sExtract) = Moore inject step extract
   where
     inject = fmap sInject
     step = zipWith sStep
@@ -511,10 +511,10 @@ data Medianer a b = Medianer
     medianEst :: a
   }
 
--- | onlineL1' takes a function and turns it into a `Mealy` where the step is an incremental update of an (isomorphic) median statistic.
+-- | onlineL1' takes a function and turns it into a `Moore` where the step is an incremental update of an (isomorphic) median statistic.
 onlineL1 ::
-  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Mealy a b
-onlineL1 i d f g = Mealy inject step extract
+  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Moore a b
+onlineL1 i d f g = Moore inject step extract
   where
     inject a = let s = abs (f a) in Medianer s one (i * s)
     step (Medianer s c m) a =
@@ -535,6 +535,6 @@ onlineL1 i d f g = Mealy inject step extract
 {-# INLINEABLE onlineL1 #-}
 
 -- | moving median
-maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> Mealy a a
+maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> Moore a a
 maL1 i d r = onlineL1 i d id (* r)
 {-# INLINEABLE maL1 #-}

@@ -2,7 +2,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Reverse-mode AD through a 'Mealy' scan.
+-- | Reverse-mode AD through a 'Moore' scan.
 --
 -- The idea is to run the mealy with 'Circuit.Diff.Diff' as the carrier.  Each
 -- input element becomes a variable over the whole input list, so the final
@@ -24,7 +24,7 @@ module Circuit.Stats.Diff
     variable,
     variables,
 
-    -- * Reverse-step differentiable Mealy
+    -- * Reverse-step differentiable Moore
     DiffProcess (..),
     StdState (..),
     diffFold,
@@ -41,7 +41,7 @@ module Circuit.Stats.Diff
     gradFold,
     gradScan,
 
-    -- * Net Mealy runners
+    -- * Net Moore runners
     constant,
     netFold,
     netScan,
@@ -65,7 +65,7 @@ module Circuit.Stats.Diff
 where
 
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
-import Circuit.Process (Mealy)
+import Circuit.Process (Moore)
 import Circuit.Stats (Averager (..), fold, ma, online, scan, sqma, std, pattern A)
 import Data.List (length)
 import Data.Vector.Unboxed qualified as VU
@@ -130,11 +130,11 @@ variables xs =
 -- | Fold a list through a differentiable mealy and return the final output
 -- together with a pullback through the entire fold.
 --
--- >>> let m = PS.asum :: PS.Mealy (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
+-- >>> let m = PS.asum :: PS.Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
 -- (6.0,[1.0,1.0,1.0])
 gradFold ::
   (Additive a) =>
-  Mealy (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
+  Moore (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   (b, b -> [a])
 gradFold _ [] = error "gradFold: empty list"
@@ -149,11 +149,11 @@ gradFold m xs =
 -- outputs together with a pullback that maps a list of output cotangents
 -- (one per step) to input cotangents.
 --
--- >>> let m = PS.asum :: PS.Mealy (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
+-- >>> let m = PS.asum :: PS.Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
 -- [3.0,2.0,1.0]
 gradScan ::
   (Additive a) =>
-  Mealy (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
+  Moore (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   ([b], [b] -> [a])
 gradScan _ [] = ([], const [])
@@ -177,7 +177,7 @@ constant x = Diff (const (x, const zero))
 -- through the parameters.
 netFold ::
   (Additive p) =>
-  Mealy (Diff tag p a) (Diff tag p b) ->
+  Moore (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   (b, b -> p)
@@ -191,7 +191,7 @@ netFold m p xs =
 -- pullback that maps output cotangents to parameter cotangents.
 netScan ::
   (Additive p) =>
-  Mealy (Diff tag p a) (Diff tag p b) ->
+  Moore (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   ([b], [b] -> p)
@@ -212,32 +212,32 @@ onlineDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   (Diff tag p a -> Diff tag p b) ->
   (Diff tag p b -> Diff tag p b) ->
-  Mealy (Diff tag p a) (Diff tag p b)
+  Moore (Diff tag p a) (Diff tag p b)
 onlineDiff = online
 
 -- | Differentiable moving average with a learnable decay parameter.
 maDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff tag p b ->
-  Mealy (Diff tag p b) (Diff tag p b)
+  Moore (Diff tag p b) (Diff tag p b)
 maDiff = ma
 
 -- | Differentiable squared moving average with a learnable decay parameter.
 sqmaDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff tag p b ->
-  Mealy (Diff tag p b) (Diff tag p b)
+  Moore (Diff tag p b) (Diff tag p b)
 sqmaDiff = sqma
 
 -- | Differentiable standard deviation with a learnable decay parameter.
 stdDiff ::
   (Subtractive p, ExpField b) =>
   Diff tag p b ->
-  Mealy (Diff tag p b) (Diff tag p b)
+  Moore (Diff tag p b) (Diff tag p b)
 stdDiff = std
 
 -- ---------------------------------------------------------------------------
--- Reverse-step Mealy
+-- Reverse-step Moore
 -- ---------------------------------------------------------------------------
 
 -- TODO: The 'DiffProcess' / 'DiffSystem' API below is kept because its
@@ -248,7 +248,7 @@ stdDiff = std
 -- plus direct @circuits-ad@ 'Circuit.Net' construction.  The oracle suite
 -- guards the current behaviour.
 
--- | A 'Mealy' machine with explicit state and differentiable
+-- | A 'Moore' machine with explicit state and differentiable
 -- inject / step / extract functions.
 --
 -- The pullbacks are captured during the forward pass and then replayed by a
@@ -272,7 +272,7 @@ data DiffProcess s a b = DiffProcess
 --
 -- Pair with an initial state via 'diffSystemAsDiffProcess' to reuse
 -- 'diffScan' \/ 'diffFold'.  Agents that are 'System's sit here for Diff
--- without pretending to be 'Mealy' first.
+-- without pretending to be 'Moore' first.
 data DiffSystem s i o = DiffSystem
   { dsExtract :: Diff' s i,
     dsStep :: Diff' (s, o) s

@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- | simulation to support testing of Mealy's using mwc-probability
+-- | simulation to support testing of Moore's using mwc-probability
 module Circuit.Stats.Simulate
   ( rvs,
     rvsp,

@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Ordinary differential equation integrators as streaming 'Mealy' machines.
+-- | Ordinary differential equation integrators as streaming 'Moore' machines.
 --
 -- A vector field is represented as a 'Diff' so the same field can be reused
 -- in differentiable contexts; the integrators themselves use only the forward
@@ -27,14 +27,14 @@ module Circuit.Stats.ODE
     euler,
     rk4,
 
-    -- * Mealy machines
+    -- * Moore machines
     eulerProcess,
     rk4Process,
   )
 where
 
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
-import Circuit.Process (Mealy (..))
+import Circuit.Process (Moore (..))
 import Data.List (scanl')
 import NumHask.Prelude
 
@@ -125,7 +125,7 @@ rk4 ::
   [s]
 rk4 f = scanl' (rk4Step f)
 
--- | A 'Mealy' machine that performs Euler integration.
+-- | A 'Moore' machine that performs Euler integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
@@ -133,10 +133,10 @@ eulerProcess ::
   (Additive s, MultiplicativeAction s, Scalar s ~ h) =>
   Diff' s s ->
   s ->
-  Mealy h s
-eulerProcess f y0 = Mealy (const y0) (eulerStep f) id
+  Moore h s
+eulerProcess f y0 = Moore (const y0) (eulerStep f) id
 
--- | A 'Mealy' machine that performs RK4 integration.
+-- | A 'Moore' machine that performs RK4 integration.
 --
 -- Input is the step size @h@; output is the current state.  The first input
 -- is used only to kick off the machine, so its value is ignored.
@@ -144,5 +144,5 @@ rk4Process ::
   (Additive s, Additive (Scalar s), DivisiveAction s, Scalar s ~ h) =>
   Diff' s s ->
   s ->
-  Mealy h s
-rk4Process f y0 = Mealy (const y0) (rk4Step f) id
+  Moore h s
+rk4Process f y0 = Moore (const y0) (rk4Step f) id
