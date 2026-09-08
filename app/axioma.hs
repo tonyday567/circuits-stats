@@ -13,8 +13,8 @@
 -- @circuits-ad@ on a shared quadratic computation.
 module Main where
 
+import Circuit.Cell (Moore, fold, scan, pattern Moore)
 import Circuit.Diff.Circuit (Diff, Diff', quadD, runDiff, pattern Diff)
-import Circuit.Process (Moore (..), fold, scan)
 import Circuit.Stats
   ( cov,
     gdiff,

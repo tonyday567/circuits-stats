@@ -17,7 +17,8 @@
 -- are the canonical @circuits-stats@ reference boxes.
 module Circuit.Stats
   ( -- * Moore re-export
-    Moore (..),
+    Moore,
+    pattern Moore,
     dipure,
     before,
     after,
@@ -66,8 +67,8 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
+import Circuit.Cell (Moore, after, before, fold, scan, pattern Moore)
 import Circuit.Mat.Field (inverseM)
-import Circuit.Process (Moore (..), after, before, fold, scan)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
 import Data.Map qualified as Map
@@ -80,7 +81,6 @@ import Harpie.Fixed qualified as Box
 import Harpie.Fixed.Generic qualified as F
 import Harpie.Shape qualified as S
 import NumHask.Prelude hiding (asum, diff, fold, id, last, (.), (|*))
-
 
 -- | Run four mealy machines on the same input and combine their outputs.
 parWith4 :: (w -> x -> y -> z -> r) -> Moore a w -> Moore a x -> Moore a y -> Moore a z -> Moore a r
