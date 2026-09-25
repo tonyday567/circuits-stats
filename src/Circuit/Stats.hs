@@ -6,13 +6,13 @@
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
 -- | Streaming statistics and state-machine specialisations built on
--- 'Circuit.Moore.Moore'.
+-- 'Circuit.GMachine.Moore'.
 --
--- The 'Moore' carrier itself lives in "Circuit.Moore"; this module is the
+-- The 'Moore' carrier itself lives in "Circuit.GMachine"; this module is the
 -- box library: moving averages, standard deviations, regression, quantiles,
 -- delays, and related streaming combinators.
 --
--- 'fold' is re-exported from "Circuit.Moore" and is total (it returns
+-- 'fold' is re-exported from "Circuit.GMachine" and is total (it returns
 -- 'Nothing' for an empty list). The statistical implementations in this module
 -- are the canonical @circuits-stats@ reference boxes.
 module Circuit.Stats
