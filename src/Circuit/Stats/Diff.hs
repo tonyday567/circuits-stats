@@ -64,8 +64,8 @@ module Circuit.Stats.Diff
   )
 where
 
-import Circuit.Cell (Moore, pattern Moore)
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
+import Circuit.GMachine (Moore, pattern Moore)
 import Circuit.Stats (Averager (..), fold, ma, online, scan, sqma, std, pattern A)
 import Data.List (length)
 import Data.Vector.Unboxed qualified as VU

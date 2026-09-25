@@ -33,8 +33,8 @@ module Circuit.Stats.ODE
   )
 where
 
-import Circuit.Cell (Moore, pattern Moore)
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
+import Circuit.GMachine (Moore, pattern Moore)
 import Data.List (scanl')
 import NumHask.Prelude
 

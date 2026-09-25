@@ -67,7 +67,7 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
-import Circuit.Cell (Moore, after, before, fold, scan, pattern Moore)
+import Circuit.GMachine (Moore, after, before, fold, scan, pattern Moore)
 import Circuit.Mat.Field (inverseM)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
