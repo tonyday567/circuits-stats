@@ -34,7 +34,7 @@ module Circuit.Stats.ODE
 where
 
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
-import Circuit.GMachine (Moore, pattern Moore)
+import Circuit.GMachine (Moore, moore)
 import Data.List (scanl')
 import NumHask.Prelude
 
@@ -134,7 +134,7 @@ eulerProcess ::
   Diff' s s ->
   s ->
   Moore h s
-eulerProcess f y0 = Moore (const y0) (eulerStep f) id
+eulerProcess f y0 = moore (const y0) (eulerStep f) id
 
 -- | A 'Moore' machine that performs RK4 integration.
 --
@@ -145,4 +145,4 @@ rk4Process ::
   Diff' s s ->
   s ->
   Moore h s
-rk4Process f y0 = Moore (const y0) (rk4Step f) id
+rk4Process f y0 = moore (const y0) (rk4Step f) id

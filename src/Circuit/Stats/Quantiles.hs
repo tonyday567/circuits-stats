@@ -40,7 +40,7 @@ emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
 
 -- | Moore quantiles based on the t-digest library.
 quantiles :: Double -> [Double] -> Moore Double [Double]
-quantiles r qs = Moore inject step extract
+quantiles r qs = moore inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -52,7 +52,7 @@ quantiles r qs = Moore inject step extract
 --
 -- The t-digest algorithm works best at extremes and can be unreliable in the centre.
 median :: Double -> Moore Double Double
-median r = Moore inject step extract
+median r = moore inject step extract
   where
     step x a = onlineInsert a x
     inject a = onlineInsert a (emptyOnlineTDigest r)
@@ -97,7 +97,7 @@ onlineForceCompress (OnlineTDigest t n r) = OnlineTDigest t' 0 r
 --
 -- * 1 if the current value is greater than the current process median.
 digitize :: Double -> [Double] -> Moore Double Int
-digitize r qs = Moore inject step extract
+digitize r qs = moore inject step extract
   where
     step (x, _) a = (onlineInsert a x, a)
     inject a = (onlineInsert a (emptyOnlineTDigest r), a)
@@ -107,7 +107,7 @@ digitize r qs = Moore inject step extract
         (OnlineTDigest t _ _) = onlineForceCompress x
         bucket' xs l' =
           fromMaybe 0
-            . fold (Moore id (+) id)
+            . fold (moore id (+) id)
             $ ( \x' ->
                   if x' > l'
                     then 0

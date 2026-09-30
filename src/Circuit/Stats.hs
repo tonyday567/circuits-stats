@@ -18,7 +18,7 @@
 module Circuit.Stats
   ( -- * Moore re-export
     Moore,
-    pattern Moore,
+    moore,
     dipure,
     before,
     after,
@@ -67,7 +67,7 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
-import Circuit.GMachine (Moore, after, before, fold, scan, pattern Moore)
+import Circuit.GMachine (Cell (..), GMoore (..), GMooreT (..), Moore, after, before, fold, moore, scan)
 import Circuit.Mat.Field (inverseM)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
@@ -137,7 +137,7 @@ instance Exception ProcessStatsError
 
 -- | Create a 'Moore' from a (pure) binary operation.
 dipure :: (a -> a -> a) -> Moore a a
-dipure f = Moore id f id
+dipure f = moore id f id
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
 newtype Averager a b = Averager
@@ -202,7 +202,7 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 --
 -- > std r = liftA2 (\s ss -> sqrt (ss - s ** 2)) (ma r) (sqma r)
 online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Moore a b
-online f g = Moore intract step av
+online f g = moore intract step av
   where
     intract a = A (f a) one
     step (A s c) a =
@@ -376,7 +376,7 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> fold' (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
 beta :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
-beta r = Moore inject step extract
+beta r = moore inject step extract
   where
     -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
     extract (A (RegressionState xx x xy y) c) =
@@ -406,10 +406,10 @@ alpha r =
 {-# INLINEABLE alpha #-}
 
 arrayify :: (S.KnownNats s) => Moore a b -> Moore (F.Array Vector s a) (F.Array Vector s b)
-arrayify (Moore sInject sStep sExtract) = Moore inject step extract
+arrayify (GMooreT (GMoore sInject (Cell sStep sExtract))) = moore inject step extract
   where
     inject = fmap sInject
-    step = F.zipWith sStep
+    step = F.zipWith (curry sStep)
     extract = fmap sExtract
 
 -- | multiple regression
@@ -424,23 +424,23 @@ reg r = liftA2 (,) (beta r) (alpha r)
 
 -- | accumulated sum
 asum :: (Additive a) => Moore a a
-asum = Moore id (+) id
+asum = moore id (+) id
 
 -- | constant Moore
 aconst :: b -> Moore a b
-aconst b = Moore (const ()) (\_ _ -> ()) (const b)
+aconst b = moore (const ()) (\_ _ -> ()) (const b)
 
 -- | most recent value
 last :: Moore a a
-last = Moore id (\_ a -> a) id
+last = moore id (\_ a -> a) id
 
 -- | most recent value if it exists, previous value otherwise.
 maybeLast :: a -> Moore (Maybe a) a
-maybeLast def = Moore (fromMaybe def) fromMaybe id
+maybeLast def = moore (fromMaybe def) fromMaybe id
 
 -- | delay input values by 1
 delay1 :: a -> Moore a a
-delay1 x0 = Moore (x0,) (\(_, x) a -> (x, a)) fst
+delay1 x0 = moore (x0,) (\(_, x) a -> (x, a)) fst
 
 -- | delays values by n steps
 --
@@ -460,7 +460,7 @@ delay ::
   -- | initial statistical values, delay equals length
   [a] ->
   Moore a a
-delay x0 = Moore inject step extract
+delay x0 = moore inject step extract
   where
     inject a = Seq.fromList x0 Seq.|> a
     extract :: Seq a -> a
@@ -472,35 +472,35 @@ delay x0 = Moore inject step extract
 
 -- | a moving window of a's, most recent at the front of the sequence
 window :: Int -> Moore a (Seq.Seq a)
-window n = Moore Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
+window n = moore Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 {-# INLINEABLE window #-}
 
 -- | binomial operator applied to last and this value
 diff :: (a -> a -> b) -> Moore a b
-diff f = Moore (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
+diff f = moore (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
 
 -- | generalised diff function.
 gdiff :: (a -> b) -> (a -> a -> b) -> Moore a b
-gdiff d0 d = Moore (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
+gdiff d0 d = moore (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
 
 -- | Unchanged since last time.
 same :: (Eq b) => (a -> b) -> Moore a Bool
-same b = Moore (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
+same b = moore (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
 
 -- | Count observed values
 countM :: (Ord a) => Moore a (Map.Map a Int)
-countM = Moore (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
+countM = moore (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
 
 -- | Sum values of a key-value pair.
 sumM :: (Ord a, Additive b) => Moore (a, b) (Map.Map a b)
-sumM = Moore (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
+sumM = moore (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
 
 -- | Convert a Moore to a Moore operating on lists.
 listify :: Moore a b -> Moore [a] [b]
-listify (Moore sInject sStep sExtract) = Moore inject step extract
+listify (GMooreT (GMoore sInject (Cell sStep sExtract))) = moore inject step extract
   where
     inject = fmap sInject
-    step = zipWith sStep
+    step = zipWith (curry sStep)
     extract = fmap sExtract
 
 -- | A rough Median.
@@ -514,7 +514,7 @@ data Medianer a b = Medianer
 -- | onlineL1' takes a function and turns it into a `Moore` where the step is an incremental update of an (isomorphic) median statistic.
 onlineL1 ::
   (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Moore a b
-onlineL1 i d f g = Moore inject step extract
+onlineL1 i d f g = moore inject step extract
   where
     inject a = let s = abs (f a) in Medianer s one (i * s)
     step (Medianer s c m) a =

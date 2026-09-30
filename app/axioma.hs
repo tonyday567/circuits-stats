@@ -14,7 +14,7 @@
 module Main where
 
 import Circuit.Diff.Circuit (Diff, Diff', quadD, runDiff, pattern Diff)
-import Circuit.GMachine (Moore, fold, scan, pattern Moore)
+import Circuit.GMachine (Moore, fold, moore, scan)
 import Circuit.Stats
   ( cov,
     gdiff,
@@ -115,7 +115,7 @@ p6 = do
   let xs = [1, 2, 4 :: Double]
       d1 = scan (gdiff id (-)) xs
       d2 = scan (gdiff (const 0) (-)) xs
-      d3 = scan (Moore (0,) (\(_, prev) a -> (prev, a)) fst) xs
+      d3 = scan (moore (0,) (\(_, prev) a -> (prev, a)) fst) xs
   pure $ d1 == [1, 1, 2] && d2 == [0, 1, 2] && d3 == [0, 1, 2]
 
 -- | P7: Euler reproduces a hand recurrence; RK4 beats Euler on @y' = y@.
@@ -145,7 +145,7 @@ p8 = do
 -- | P9: gradient runners agree with hand-derived references.
 p9 :: IO Bool
 p9 = do
-  let m = Moore id (+) id :: Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
+  let m = moore id (+) id :: Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
       (_, g1) = gradFold m [1, 2, 3 :: Double]
       (_, g2) = diffScan (sqmaDiffProcess 0) [1, 2, 3 :: Double]
       (_, g3) = diffScan (maDiffProcess 0) [1, 2, 3 :: Double]
@@ -161,7 +161,7 @@ p10 = do
   let constD :: Double -> Diff' (GradInputs Double) Double
       constD x = Diff $ \_ -> (x, \_ -> zero)
       quadProcess :: Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
-      quadProcess = Moore id (\s _ -> s) (\s -> constD 2 * s * s + constD 3 * s + constD 5)
+      quadProcess = moore id (\s _ -> s) (\s -> constD 2 * s * s + constD 3 * s + constD 5)
       (yDiff, gDiff) = gradFold quadProcess [1 :: Double]
       (yAD, pbAD) = runDiff quadD 1
       gradDiff = case gDiff 1 of
