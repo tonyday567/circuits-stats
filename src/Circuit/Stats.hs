@@ -21,7 +21,6 @@ module Circuit.Stats
     moore,
     dipure,
     before,
-    after,
     scan,
     fold,
     Averager (..),
@@ -67,7 +66,7 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
-import Circuit.GMachine (Cell (..), GMoore (..), GMooreT (..), Moore, after, before, fold, moore, scan)
+import Circuit.GMachine (Cell (..), GMoore (..), GMooreT (..), Moore, before, fold, moore, scan)
 import Circuit.Mat.Field (inverseM)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception

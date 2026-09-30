@@ -118,4 +118,4 @@ digitize r qs = moore inject step extract
 -- | transform an input to a [0,1] signal, via digitalization.
 signalize :: Double -> [Double] -> Moore Double Double
 signalize r qs' =
-  after (digitize r qs') (\x -> fromIntegral x / fromIntegral (length qs' + 1))
+  fmap (\x -> fromIntegral x / fromIntegral (length qs' + 1)) (digitize r qs')
