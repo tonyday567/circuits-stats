@@ -56,7 +56,6 @@ module Circuit.Stats
     same,
     countM,
     sumM,
-    listify,
 
     -- * median
     Medianer (..),
@@ -494,14 +493,6 @@ countM = moore (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
 -- | Sum values of a key-value pair.
 sumM :: (Ord a, Additive b) => MooreT (,) (->) (a, b) (Map.Map a b)
 sumM = moore (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
-
--- | Convert a machine to one operating on lists.
-listify :: MooreT (,) (->) a b -> MooreT (,) (->) [a] [b]
-listify (MooreT (Body sInject sStep sEmit)) = moore inject step extract
-  where
-    inject = fmap sInject
-    step = zipWith (curry sStep)
-    extract = fmap (unConst . sEmit)
 
 -- | A rough Median.
 -- The average absolute value of the stat is used to callibrate estimate drift towards the median
