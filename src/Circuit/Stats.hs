@@ -6,18 +6,18 @@
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
 -- | Streaming statistics and state-machine specialisations built on
--- 'Circuit.GMachine.Moore'.
+-- 'Circuit.Machine.MooreT'.
 --
--- The 'Moore' carrier itself lives in "Circuit.GMachine"; this module is the
+-- The 'MooreT' carrier itself lives in "Circuit.Machine"; this module is the
 -- box library: moving averages, standard deviations, regression, quantiles,
 -- delays, and related streaming combinators.
 --
--- 'fold' is re-exported from "Circuit.GMachine" and is total (it returns
+-- 'fold' is re-exported from "Circuit.Machine" and is total (it returns
 -- 'Nothing' for an empty list). The statistical implementations in this module
 -- are the canonical @circuits-stats@ reference boxes.
 module Circuit.Stats
-  ( -- * Moore re-export
-    Moore,
+  ( -- * MooreT re-export
+    MooreT,
     moore,
     dipure,
     before,
@@ -66,8 +66,9 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
-import Circuit.GMachine (Cell (..), GMoore (..), GMooreT (..), Moore, before, fold, moore, scan)
+import Circuit.Machine (Body (..), MooreT (..), before, fold, moore, scan)
 import Circuit.Mat.Field (inverseM)
+import Circuit.Tensor (unConst)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
 import Data.Map qualified as Map
@@ -82,7 +83,7 @@ import Harpie.Shape qualified as S
 import NumHask.Prelude hiding (asum, diff, fold, id, last, (.), (|*))
 
 -- | Run four mealy machines on the same input and combine their outputs.
-parWith4 :: (w -> x -> y -> z -> r) -> Moore a w -> Moore a x -> Moore a y -> Moore a z -> Moore a r
+parWith4 :: (w -> x -> y -> z -> r) -> MooreT (,) (->) a w -> MooreT (,) (->) a x -> MooreT (,) (->) a y -> MooreT (,) (->) a z -> MooreT (,) (->) a r
 parWith4 f p1 p2 p3 p4 = liftA2 (\w (x, y, z) -> f w x y z) p1 (liftA3 (,,) p2 p3 p4)
 
 -- | Scale a functorial container by a scalar.
@@ -135,7 +136,7 @@ newtype ProcessStatsError = ProcessStatsError {processStatsErrorMessage :: Text}
 instance Exception ProcessStatsError
 
 -- | Create a 'Moore' from a (pure) binary operation.
-dipure :: (a -> a -> a) -> Moore a a
+dipure :: (a -> a -> a) -> MooreT (,) (->) a a
 dipure f = moore id f id
 
 -- | Most common statistics are averages, which are some sort of aggregation of values (sum) and some sort of sample size (count).
@@ -200,7 +201,7 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 -- Parallel-style exponentially-weighted standard deviation computation:
 --
 -- > std r = liftA2 (\s ss -> sqrt (ss - s ** 2)) (ma r) (sqma r)
-online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> Moore a b
+online :: (Divisive b, Additive b) => (a -> b) -> (b -> b) -> MooreT (,) (->) a b
 online f g = moore intract step av
   where
     intract a = A (f a) one
@@ -218,7 +219,7 @@ online f g = moore intract step av
 --
 -- >>> fold' (ma 0.99) xs0
 -- 9.713356299018187e-2
-ma :: (Divisive a, Additive a) => a -> Moore a a
+ma :: (Divisive a, Additive a) => a -> MooreT (,) (->) a a
 ma r = online id (* r)
 {-# INLINEABLE ma #-}
 
@@ -226,14 +227,14 @@ ma r = online id (* r)
 --
 -- >>> fold' (absma 1) xs0
 -- 0.8075705557429647
-absma :: (Divisive a, Absolute a) => a -> Moore a a
+absma :: (Divisive a, Absolute a) => a -> MooreT (,) (->) a a
 absma r = online abs (* r)
 {-# INLINEABLE absma #-}
 
 -- | average square
 --
 -- > fold' (ma r) . fmap (**2) == fold' (sqma r)
-sqma :: (Divisive a, Additive a) => a -> Moore a a
+sqma :: (Divisive a, Additive a) => a -> MooreT (,) (->) a a
 sqma r = online (\x -> x * x) (* r)
 {-# INLINEABLE sqma #-}
 
@@ -256,7 +257,7 @@ sqma r = online (\x -> x * x) (* r)
 --
 -- >>> fold' (std 1) xs0
 -- 1.0126438036262801
-std :: (ExpField a) => a -> Moore a a
+std :: (ExpField a) => a -> MooreT (,) (->) a a
 std r = liftA2 (\s ss -> sqrt (ss - s ** (one + one))) (ma r) (sqma r)
 {-# INLINEABLE std #-}
 
@@ -264,7 +265,7 @@ std r = liftA2 (\s ss -> sqrt (ss - s ** (one + one))) (ma r) (sqma r)
 --
 -- >>> fold' (cov (ma 1)) xsp
 -- 0.7818936662586868
-cov :: (Field a) => Moore a a -> Moore (a, a) a
+cov :: (Field a) => MooreT (,) (->) a a -> MooreT (,) (->) (a, a) a
 cov m =
   liftA3
     (\xy x' y' -> xy - x' * y')
@@ -277,7 +278,7 @@ cov m =
 --
 -- >>> fold' (corrGauss 1) xsp
 -- 0.7978347126677433
-corrGauss :: (ExpField a) => a -> Moore (a, a) a
+corrGauss :: (ExpField a) => a -> MooreT (,) (->) (a, a) a
 corrGauss r =
   liftA3
     (\cov' stdx stdy -> cov' / (stdx * stdy))
@@ -292,7 +293,7 @@ corrGauss r =
 -- 0.7978347126677433
 --
 -- > corr (ma r) (std r) == corrGauss r
-corr :: (ExpField a) => Moore a a -> Moore a a -> Moore (a, a) a
+corr :: (ExpField a) => MooreT (,) (->) a a -> MooreT (,) (->) a a -> MooreT (,) (->) (a, a) a
 corr central deviation =
   liftA3
     (\cov' stdx stdy -> cov' / (stdx * stdy))
@@ -315,7 +316,7 @@ corr central deviation =
 --
 -- >>> fold' (beta1 (ma 1)) $ zipWith (\x y -> (y, x + y)) xs0 xs1
 -- 0.999747321294513
-beta1 :: (ExpField a) => Moore a a -> Moore (a, a) a
+beta1 :: (ExpField a) => MooreT (,) (->) a a -> MooreT (,) (->) (a, a) a
 beta1 m =
   parWith4
     (\xy x' y' x2 -> (xy - x' * y') / (x2 - x' * x'))
@@ -337,7 +338,7 @@ beta1 m =
 --
 -- >>> fold' (alpha1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- 1.3680496627365146e-2
-alpha1 :: (ExpField a) => Moore a a -> Moore (a, a) a
+alpha1 :: (ExpField a) => MooreT (,) (->) a a -> MooreT (,) (->) (a, a) a
 alpha1 m = liftA3 (\x b y -> y - b * x) (before m fst) (beta1 m) (before m snd)
 {-# INLINEABLE alpha1 #-}
 
@@ -345,7 +346,7 @@ alpha1 m = liftA3 (\x b y -> y - b * x) (before m fst) (beta1 m) (before m snd)
 --
 -- >>> fold' (reg1 (ma 1)) $ zipWith (\x y -> ((3+y), x + 0.5 * (3 + y))) xs0 xs1
 -- (1.3680496627365146e-2,0.4997473212944953)
-reg1 :: (ExpField a) => Moore a a -> Moore (a, a) (a, a)
+reg1 :: (ExpField a) => MooreT (,) (->) a a -> MooreT (,) (->) (a, a) (a, a)
 reg1 m = liftA2 (,) (alpha1 m) (beta1 m)
 
 data RegressionState (n :: Nat) a = RegressionState
@@ -374,7 +375,7 @@ data RegressionState (n :: Nat) a = RegressionState
 -- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (beta 0.99) zs
 -- [0.6228820021456606,0.8461936860075405]
-beta :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
+beta :: (ExpField a, KnownNat n) => a -> MooreT (,) (->) (F.Array Vector '[n] a, a) (F.Array Vector '[n] a)
 beta r = moore inject step extract
   where
     -- extract :: Averager (RegressionState n a) a -> (F.Array Vector '[n] a)
@@ -395,7 +396,7 @@ rsOnline r (A (RegressionState xx x xy y) c) (A (RegressionState xx' x' xy' y') 
     d s s' = r * s + s'
 
 -- | alpha in a multiple regression
-alpha :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) a
+alpha :: (ExpField a, KnownNat n) => a -> MooreT (,) (->) (F.Array Vector '[n] a, a) a
 alpha r =
   liftA3
     (\xs b y -> y - sum (F.zipWith (*) b xs))
@@ -404,12 +405,12 @@ alpha r =
     (before (ma r) snd)
 {-# INLINEABLE alpha #-}
 
-arrayify :: (S.KnownNats s) => Moore a b -> Moore (F.Array Vector s a) (F.Array Vector s b)
-arrayify (GMooreT (GMoore sInject (Cell sStep sExtract))) = moore inject step extract
+arrayify :: (S.KnownNats s) => MooreT (,) (->) a b -> MooreT (,) (->) (F.Array Vector s a) (F.Array Vector s b)
+arrayify (MooreT (Body sInject sStep sEmit)) = moore inject step extract
   where
     inject = fmap sInject
     step = F.zipWith (curry sStep)
-    extract = fmap sExtract
+    extract = fmap (unConst . sEmit)
 
 -- | multiple regression
 --
@@ -417,28 +418,28 @@ arrayify (GMooreT (GMoore sInject (Cell sStep sExtract))) = moore inject step ex
 -- >>> let zs = zip (zipWith (\x y -> F.array @Vector @'[2] [x,y]) xs1 xs2) ys
 -- >>> fold' (reg 0.99) zs
 -- ([0.6228820021456606,0.8461936860075405],2.536775201287266e-2)
-reg :: (ExpField a, KnownNat n) => a -> Moore (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
+reg :: (ExpField a, KnownNat n) => a -> MooreT (,) (->) (F.Array Vector '[n] a, a) (F.Array Vector '[n] a, a)
 reg r = liftA2 (,) (beta r) (alpha r)
 {-# INLINEABLE reg #-}
 
 -- | accumulated sum
-asum :: (Additive a) => Moore a a
+asum :: (Additive a) => MooreT (,) (->) a a
 asum = moore id (+) id
 
 -- | constant Moore
-aconst :: b -> Moore a b
+aconst :: b -> MooreT (,) (->) a b
 aconst b = moore (const ()) (\_ _ -> ()) (const b)
 
 -- | most recent value
-last :: Moore a a
+last :: MooreT (,) (->) a a
 last = moore id (\_ a -> a) id
 
 -- | most recent value if it exists, previous value otherwise.
-maybeLast :: a -> Moore (Maybe a) a
+maybeLast :: a -> MooreT (,) (->) (Maybe a) a
 maybeLast def = moore (fromMaybe def) fromMaybe id
 
 -- | delay input values by 1
-delay1 :: a -> Moore a a
+delay1 :: a -> MooreT (,) (->) a a
 delay1 x0 = moore (x0,) (\(_, x) a -> (x, a)) fst
 
 -- | delays values by n steps
@@ -458,7 +459,7 @@ delay1 x0 = moore (x0,) (\(_, x) a -> (x, a)) fst
 delay ::
   -- | initial statistical values, delay equals length
   [a] ->
-  Moore a a
+  MooreT (,) (->) a a
 delay x0 = moore inject step extract
   where
     inject a = Seq.fromList x0 Seq.|> a
@@ -470,37 +471,37 @@ delay x0 = moore inject step extract
     step (_ Seq.:<| xs) a = xs Seq.|> a
 
 -- | a moving window of a's, most recent at the front of the sequence
-window :: Int -> Moore a (Seq.Seq a)
+window :: Int -> MooreT (,) (->) a (Seq.Seq a)
 window n = moore Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 {-# INLINEABLE window #-}
 
 -- | binomial operator applied to last and this value
-diff :: (a -> a -> b) -> Moore a b
+diff :: (a -> a -> b) -> MooreT (,) (->) a b
 diff f = moore (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
 
 -- | generalised diff function.
-gdiff :: (a -> b) -> (a -> a -> b) -> Moore a b
+gdiff :: (a -> b) -> (a -> a -> b) -> MooreT (,) (->) a b
 gdiff d0 d = moore (\a -> (d0 a, a)) (\(_, a') a -> (d a a', a)) fst
 
 -- | Unchanged since last time.
-same :: (Eq b) => (a -> b) -> Moore a Bool
+same :: (Eq b) => (a -> b) -> MooreT (,) (->) a Bool
 same b = moore (\a -> (True, b a)) (\(s, x) a -> (s && b a == x, x)) fst
 
 -- | Count observed values
-countM :: (Ord a) => Moore a (Map.Map a Int)
+countM :: (Ord a) => MooreT (,) (->) a (Map.Map a Int)
 countM = moore (`Map.singleton` 1) (\m k -> Map.insertWith (+) k 1 m) id
 
 -- | Sum values of a key-value pair.
-sumM :: (Ord a, Additive b) => Moore (a, b) (Map.Map a b)
+sumM :: (Ord a, Additive b) => MooreT (,) (->) (a, b) (Map.Map a b)
 sumM = moore (uncurry Map.singleton) (\m (k, v) -> Map.insertWith (+) k v m) id
 
--- | Convert a Moore to a Moore operating on lists.
-listify :: Moore a b -> Moore [a] [b]
-listify (GMooreT (GMoore sInject (Cell sStep sExtract))) = moore inject step extract
+-- | Convert a machine to one operating on lists.
+listify :: MooreT (,) (->) a b -> MooreT (,) (->) [a] [b]
+listify (MooreT (Body sInject sStep sEmit)) = moore inject step extract
   where
     inject = fmap sInject
     step = zipWith (curry sStep)
-    extract = fmap sExtract
+    extract = fmap (unConst . sEmit)
 
 -- | A rough Median.
 -- The average absolute value of the stat is used to callibrate estimate drift towards the median
@@ -512,7 +513,7 @@ data Medianer a b = Medianer
 
 -- | onlineL1' takes a function and turns it into a `Moore` where the step is an incremental update of an (isomorphic) median statistic.
 onlineL1 ::
-  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> Moore a b
+  (Ord b, Field b, Absolute b) => b -> b -> (a -> b) -> (b -> b) -> MooreT (,) (->) a b
 onlineL1 i d f g = moore inject step extract
   where
     inject a = let s = abs (f a) in Medianer s one (i * s)
@@ -534,6 +535,6 @@ onlineL1 i d f g = moore inject step extract
 {-# INLINEABLE onlineL1 #-}
 
 -- | moving median
-maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> Moore a a
+maL1 :: (Ord a, Field a, Absolute a) => a -> a -> a -> MooreT (,) (->) a a
 maL1 i d r = onlineL1 i d id (* r)
 {-# INLINEABLE maL1 #-}

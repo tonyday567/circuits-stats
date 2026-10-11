@@ -39,7 +39,7 @@ emptyOnlineTDigest :: Double -> OnlineTDigest
 emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
 
 -- | Moore quantiles based on the t-digest library.
-quantiles :: Double -> [Double] -> Moore Double [Double]
+quantiles :: Double -> [Double] -> MooreT (,) (->) Double [Double]
 quantiles r qs = moore inject step extract
   where
     step x a = onlineInsert a x
@@ -51,7 +51,7 @@ quantiles r qs = moore inject step extract
 -- | Moore median using the t-digest algorithm.
 --
 -- The t-digest algorithm works best at extremes and can be unreliable in the centre.
-median :: Double -> Moore Double Double
+median :: Double -> MooreT (,) (->) Double Double
 median r = moore inject step extract
   where
     step x a = onlineInsert a x
@@ -96,7 +96,7 @@ onlineForceCompress (OnlineTDigest t n r) = OnlineTDigest t' 0 r
 -- * 0 if the current value is less than the current process median.
 --
 -- * 1 if the current value is greater than the current process median.
-digitize :: Double -> [Double] -> Moore Double Int
+digitize :: Double -> [Double] -> MooreT (,) (->) Double Int
 digitize r qs = moore inject step extract
   where
     step (x, _) a = (onlineInsert a x, a)
@@ -116,6 +116,6 @@ digitize r qs = moore inject step extract
               <$> xs
 
 -- | transform an input to a [0,1] signal, via digitalization.
-signalize :: Double -> [Double] -> Moore Double Double
+signalize :: Double -> [Double] -> MooreT (,) (->) Double Double
 signalize r qs' =
   fmap (\x -> fromIntegral x / fromIntegral (length qs' + 1)) (digitize r qs')

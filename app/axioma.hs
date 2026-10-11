@@ -14,7 +14,7 @@
 module Main where
 
 import Circuit.Diff.Circuit (Diff, Diff', quadD, runDiff, pattern Diff)
-import Circuit.GMachine (Moore, fold, moore, scan)
+import Circuit.Machine (MooreT, fold, moore, scan)
 import Circuit.Stats
   ( cov,
     gdiff,
@@ -145,7 +145,7 @@ p8 = do
 -- | P9: gradient runners agree with hand-derived references.
 p9 :: IO Bool
 p9 = do
-  let m = moore id (+) id :: Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
+  let m = moore id (+) id :: MooreT (,) (->) (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
       (_, g1) = gradFold m [1, 2, 3 :: Double]
       (_, g2) = diffScan (sqmaDiffProcess 0) [1, 2, 3 :: Double]
       (_, g3) = diffScan (maDiffProcess 0) [1, 2, 3 :: Double]
@@ -160,7 +160,7 @@ p10 :: IO Bool
 p10 = do
   let constD :: Double -> Diff' (GradInputs Double) Double
       constD x = Diff $ \_ -> (x, \_ -> zero)
-      quadProcess :: Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
+      quadProcess :: MooreT (,) (->) (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double)
       quadProcess = moore id (\s _ -> s) (\s -> constD 2 * s * s + constD 3 * s + constD 5)
       (yDiff, gDiff) = gradFold quadProcess [1 :: Double]
       (yAD, pbAD) = runDiff quadD 1

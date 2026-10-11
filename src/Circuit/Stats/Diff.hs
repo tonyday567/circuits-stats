@@ -65,7 +65,7 @@ module Circuit.Stats.Diff
 where
 
 import Circuit.Diff (Diff, Diff', runDiff, pattern Diff)
-import Circuit.GMachine (Moore)
+import Circuit.Machine (MooreT)
 import Circuit.Stats (Averager (..), fold, ma, online, scan, sqma, std, pattern A)
 import Data.List (length)
 import Data.Vector.Unboxed qualified as VU
@@ -130,11 +130,11 @@ variables xs =
 -- | Fold a list through a differentiable mealy and return the final output
 -- together with a pullback through the entire fold.
 --
--- >>> let m = PS.asum :: PS.Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
+-- >>> let m = PS.asum :: PS.MooreT (,) (->) (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
 -- (6.0,[1.0,1.0,1.0])
 gradFold ::
   (Additive a) =>
-  Moore (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
+  MooreT (,) (->) (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   (b, b -> [a])
 gradFold _ [] = error "gradFold: empty list"
@@ -149,11 +149,11 @@ gradFold m xs =
 -- outputs together with a pullback that maps a list of output cotangents
 -- (one per step) to input cotangents.
 --
--- >>> let m = PS.asum :: PS.Moore (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
+-- >>> let m = PS.asum :: PS.MooreT (,) (->) (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double) in snd (gradScan m [1,2,3]) [1,1,1]
 -- [3.0,2.0,1.0]
 gradScan ::
   (Additive a) =>
-  Moore (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
+  MooreT (,) (->) (Diff' (GradInputs a) a) (Diff' (GradInputs a) b) ->
   [a] ->
   ([b], [b] -> [a])
 gradScan _ [] = ([], const [])
@@ -177,7 +177,7 @@ constant x = Diff (const (x, const zero))
 -- through the parameters.
 netFold ::
   (Additive p) =>
-  Moore (Diff tag p a) (Diff tag p b) ->
+  MooreT (,) (->) (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   (b, b -> p)
@@ -191,7 +191,7 @@ netFold m p xs =
 -- pullback that maps output cotangents to parameter cotangents.
 netScan ::
   (Additive p) =>
-  Moore (Diff tag p a) (Diff tag p b) ->
+  MooreT (,) (->) (Diff tag p a) (Diff tag p b) ->
   p ->
   [a] ->
   ([b], [b] -> p)
@@ -212,28 +212,28 @@ onlineDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   (Diff tag p a -> Diff tag p b) ->
   (Diff tag p b -> Diff tag p b) ->
-  Moore (Diff tag p a) (Diff tag p b)
+  MooreT (,) (->) (Diff tag p a) (Diff tag p b)
 onlineDiff = online
 
 -- | Differentiable moving average with a learnable decay parameter.
 maDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff tag p b ->
-  Moore (Diff tag p b) (Diff tag p b)
+  MooreT (,) (->) (Diff tag p b) (Diff tag p b)
 maDiff = ma
 
 -- | Differentiable squared moving average with a learnable decay parameter.
 sqmaDiff ::
   (Additive p, Subtractive b, Divisive b) =>
   Diff tag p b ->
-  Moore (Diff tag p b) (Diff tag p b)
+  MooreT (,) (->) (Diff tag p b) (Diff tag p b)
 sqmaDiff = sqma
 
 -- | Differentiable standard deviation with a learnable decay parameter.
 stdDiff ::
   (Subtractive p, ExpField b) =>
   Diff tag p b ->
-  Moore (Diff tag p b) (Diff tag p b)
+  MooreT (,) (->) (Diff tag p b) (Diff tag p b)
 stdDiff = std
 
 -- ---------------------------------------------------------------------------
