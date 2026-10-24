@@ -475,8 +475,11 @@ window n = moore Seq.singleton (\xs x -> Seq.take n (x Seq.<| xs)) id
 {-# INLINEABLE window #-}
 
 -- | binomial operator applied to last and this value
+--
+-- >>> drop 1 (scan (diff (-)) [1,2,4,7 :: Int])
+-- [1,2,3]
 diff :: (a -> a -> b) -> MooreT (,) (->) a b
-diff f = moore (\a -> (a, undefined)) (\(_, prev) a -> (a, prev)) (\(curr, prev) -> f curr prev)
+diff f = moore (\a -> (a, undefined)) (\(curr, _) a -> (a, curr)) (\(curr, prev) -> f curr prev)
 
 -- | generalised diff function.
 gdiff :: (a -> b) -> (a -> a -> b) -> MooreT (,) (->) a b
