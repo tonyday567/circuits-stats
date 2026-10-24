@@ -64,6 +64,47 @@ fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100::Double]
 it returns `Nothing` for an empty input list and `Just` the final output
 otherwise.
 
+## Decay ⟜ what the decay rate is
+
+Every estimator in the library is `online f g` (`Circuit.Stats`):
+
+    sₙ = r·sₙ₋₁ + f(xₙ)     cₙ = r·cₙ₋₁ + 1     estimate = sₙ / cₙ
+
+The decayed count cₙ = (1 − rⁿ)/(1 − r) normalizes the decayed sum, so an
+observation k steps back carries normalized weight (1 − r)rᵏ. Three
+constants of the same object:
+
+- half-life ⟜ h = −ln 2 / ln r, the age at which an observation's weight
+  halves; h ≈ ln2 / (1 − r) for r near 1.
+- decayed count ⟜ cₙ → 1 / (1 − r), the sum of weights; r = 1 recovers
+  the plain average (memory grows as n), r = 0 the latest value (memory
+  1). These corners are pinned as doctests on `ma`.
+- effective sample size ⟜ ESS = (1 + r) / (1 − r) (participation ratio
+  of the weight profile). For iid data with variance σ², the variance of
+  the estimate is ≈ σ² / ESS, so r is the bias/variance dial: it trades
+  responsiveness to the recent regime against estimator variance.
+
+The same recursion, identified in the time-series literature:
+
+- `sqma r` over residuals is an EWMA variance estimator — the
+  RiskMetrics (1994) model — equivalently a restricted GARCH(1,1) with
+  ω = 0 and α + β = 1, i.e. the IGARCH boundary: variance shocks persist
+  indefinitely, decaying at rate r. The persistence is total by
+  construction; the library never estimates ω, α, β separately.
+- `beta` / `reg` step the regression sufficient statistics (xx, x, xy,
+  y) with the same recursion: discounted least squares, which is the
+  steady-state constant-gain Kalman filter for a slowly-drifting
+  parameter — the gain is pinned by r rather than adapted.
+- hft's `stdDecaySensitivity` walks the r-curve empirically (R² of
+  |return| ~ std for r ∈ [0.001, 0.05]); fast trading decays (r = 0.01,
+  memory ≈ 1) sit beside slow quantile decays (r = 0.99, memory ≈ 100).
+
+Finally, `Circuit.Stats.Diff` differentiates the whole scan, decay rate
+included: r itself is a learnable parameter, fittable by gradient
+descent against any downstream loss. That makes the two-timescale shape
+explicit — fast statistics inside the scan, a slowly-learned decay
+outside it.
+
 ## Backport notes
 
 - `fold` is now the total `Circuit.Process.fold`.

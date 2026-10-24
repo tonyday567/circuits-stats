@@ -183,6 +183,9 @@ av_ (A s c) def = bool def (s / c) (c == zero)
 
 -- | @online f g@ is a 'Moore' where f is a transformation of the data and
 -- g is a decay function (usually convergent to zero) applied at each step.
+-- See the readme, § Decay, for what the decay rate is: weight profile,
+-- half-life, effective sample size, and the EWMA / GARCH(1,1) / discounted
+-- least-squares identifications of this recursion.
 --
 -- > online id id == av
 --
