@@ -10,7 +10,8 @@
 -- P1–P8 exercise the canonical statistical / ODE / quantile implementations.
 -- P9 checks that the gradient runners in "Circuit.Stats.Diff" agree with
 -- hand-derived references.  P10 cross-checks "Circuit.Stats.Diff" against
--- @circuits-ad@ on a shared quadratic computation.
+-- @circuits-ad@ on a shared quadratic computation. P11 pins exact finite-sample
+-- order-statistic quantiles and their empty and invalid-input behaviour.
 module Main where
 
 import Circuit.Diff.Circuit (Diff, Diff', quadD, runDiff, pattern Diff)
@@ -30,7 +31,7 @@ import Circuit.Stats.Diff
     sqmaDiffProcess,
   )
 import Circuit.Stats.ODE (euler, rk4, vectorField)
-import Circuit.Stats.Quantiles (median, quantiles)
+import Circuit.Stats.Quantiles (exactMedian, exactQuantile, exactQuantiles, median, quantiles)
 import Data.List (last, sort)
 import NumHask.Prelude hiding (fold, last)
 import System.Exit (exitFailure, exitSuccess)
@@ -48,7 +49,8 @@ main = do
         run "P7" p7,
         run "P8" p8,
         run "P9" p9,
-        run "P10" p10
+        run "P10" p10,
+        run "P11" p11
       ]
   if and results then exitSuccess else exitFailure
 
@@ -169,3 +171,31 @@ p10 = do
         [] -> 0 / 0
       gradAD = pbAD 1
   pure $ approx 1e-9 yDiff yAD && approx 1e-9 gradDiff gradAD && approx 1e-9 yDiff 10
+
+-- | P11: exact quantiles select the documented zero-based order statistic.
+-- Reverse input catches missing sorting; even and p90 witnesses catch averaging
+-- and nearest-rank substitutions; invalid probabilities reject the whole batch.
+p11 :: IO Bool
+p11 = do
+  let xs = [1 .. 10 :: Int]
+      oddSample = [3, 1, 2 :: Int]
+      evenSample = [4, 1, 3, 2 :: Int]
+      duplicates = [2, 1, 2, 2, 1 :: Int]
+  pure $
+    and
+      [ exactQuantile 0.5 ([] :: [Int]) == Nothing,
+        exactQuantiles [] ([] :: [Int]) == Nothing,
+        exactQuantile 0.5 [7 :: Int] == Just 7,
+        exactMedian oddSample == Just 2,
+        exactMedian evenSample == Just 3,
+        exactQuantiles [0.5] duplicates == Just [2],
+        exactQuantiles [0.1, 0.5, 0.9] xs == Just [2, 6, 10],
+        exactQuantiles [0.1, 0.5, 0.9] [1 .. 1000 :: Int] == Just [101, 501, 901],
+        exactQuantiles [0.1, 0.5, 0.9] (reverse xs) == Just [2, 6, 10],
+        exactQuantiles [0, 1] oddSample == Just [1, 3],
+        exactQuantile (-0.1) xs == Nothing,
+        exactQuantile 1.1 xs == Nothing,
+        exactQuantile (0 / 0) xs == Nothing,
+        exactQuantiles [0.5, 1.1] xs == Nothing,
+        exactQuantiles [] xs == Just []
+      ]

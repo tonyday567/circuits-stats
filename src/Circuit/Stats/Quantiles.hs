@@ -1,9 +1,12 @@
 {-# LANGUAGE RebindableSyntax #-}
 
--- | Moore quantile statistics.
+-- | Exact finite-sample and approximate streaming quantile statistics.
 module Circuit.Stats.Quantiles
   ( median,
     quantiles,
+    exactMedian,
+    exactQuantile,
+    exactQuantiles,
     digitize,
     signalize,
     OnlineTDigest (..),
@@ -15,8 +18,13 @@ module Circuit.Stats.Quantiles
 where
 
 import Circuit.Stats
+import Data.List (sort)
+import Data.Maybe (listToMaybe)
 import Data.Sketch.TDigest qualified as TD
 import NumHask.Prelude hiding (fold)
+
+-- $setup
+-- >>> import Prelude
 
 -- | An online t-digest with exponential decay weighting.
 --
@@ -37,6 +45,74 @@ tdigestDelta = 50
 
 emptyOnlineTDigest :: Double -> OnlineTDigest
 emptyOnlineTDigest = OnlineTDigest (TD.emptyWith tdigestDelta) 0
+
+-- | Exact finite-sample median using the upper middle order statistic for an
+-- even number of observations.
+--
+-- >>> exactMedian ([] :: [Int])
+-- Nothing
+-- >>> exactMedian [7 :: Int]
+-- Just 7
+-- >>> exactMedian [3, 1, 2 :: Int]
+-- Just 2
+-- >>> exactMedian [4, 1, 3, 2 :: Int]
+-- Just 3
+exactMedian :: (Ord a) => [a] -> Maybe a
+exactMedian = exactQuantile 0.5
+
+-- | Exact finite-sample quantile from an observed order statistic.
+--
+-- For @n@ sorted, zero-based observations, probability @p@ selects index
+-- @min (n - 1) (floor (p * n))@. Thus @p = 0@ selects the minimum, @p = 1@
+-- selects the maximum, and @p = 0.5@ selects the upper middle observation
+-- when @n@ is even. Every result is an observed sample element.
+--
+-- Returns 'Nothing' for an empty sample or when @p@ is outside @[0,1]@.
+-- NaN is invalid.
+--
+-- >>> exactQuantile 0.5 ([] :: [Int])
+-- Nothing
+-- >>> exactQuantile (-0.1) [1, 2, 3 :: Int]
+-- Nothing
+-- >>> exactQuantile 1.1 [1, 2, 3 :: Int]
+-- Nothing
+-- >>> exactQuantile (0 / 0) [1, 2, 3 :: Int]
+-- Nothing
+-- >>> exactQuantile 0 [3, 1, 2 :: Int]
+-- Just 1
+-- >>> exactQuantile 1 [3, 1, 2 :: Int]
+-- Just 3
+exactQuantile :: (Ord a) => Double -> [a] -> Maybe a
+exactQuantile p xs = exactQuantiles [p] xs >>= listToMaybe
+
+-- | Exact finite-sample quantiles, sorting the sample once for all requested
+-- probabilities. Each result follows 'exactQuantile'.
+--
+-- Returns 'Nothing' for an empty sample, or if any probability is outside
+-- @[0,1]@ or NaN; an invalid probability rejects the whole batch. For a
+-- nonempty sample, an empty probability list returns @Just []@.
+--
+-- The p10, p50, and p90 convention matches @perf-explore@'s index-based
+-- reporting:
+--
+-- >>> exactQuantiles [0.1, 0.5, 0.9] [1 .. 10 :: Int]
+-- Just [2,6,10]
+-- >>> exactQuantiles [0.1, 0.5, 0.9] [10, 9 .. 1 :: Int]
+-- Just [2,6,10]
+-- >>> exactQuantiles [0.5] [2, 1, 2, 2, 1 :: Int]
+-- Just [2]
+-- >>> exactQuantiles [0.5, 1.1] [1 .. 10 :: Int]
+-- Nothing
+exactQuantiles :: (Ord a) => [Double] -> [a] -> Maybe [a]
+exactQuantiles ps xs
+  | null xs = Nothing
+  | all validProbability ps = Just $ select <$> ps
+  | otherwise = Nothing
+  where
+    sorted = sort xs
+    n = length sorted
+    select p = sorted !! min (n - 1) (floor (p * fromIntegral n))
+    validProbability p = p >= 0 && p <= 1
 
 -- | Moore quantiles based on the t-digest library.
 quantiles :: Double -> [Double] -> MooreT (,) (->) Double [Double]
