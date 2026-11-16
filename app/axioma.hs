@@ -5,13 +5,14 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Oracle suite for the circuits-stats backport.
+-- | Oracle suite for circuits-stats.
 --
--- P1–P8 exercise the canonical statistical / ODE / quantile implementations.
+-- P1–P8 exercise the statistical, ODE, and quantile implementations.
 -- P9 checks that the gradient runners in "Circuit.Stats.Diff" agree with
--- hand-derived references.  P10 cross-checks "Circuit.Stats.Diff" against
--- @circuits-ad@ on a shared quadratic computation. P11 pins exact finite-sample
--- order-statistic quantiles and their empty and invalid-input behaviour.
+-- hand-derived references. P10 cross-checks a single-input scan against
+-- 'quadD' from @circuits-diff@ on a shared quadratic computation. P11 pins
+-- exact finite-sample order-statistic quantiles and their empty and
+-- invalid-input behaviour.
 module Main where
 
 import Circuit.Diff.Circuit (Diff, Diff', quadD, runDiff, pattern Diff)
@@ -153,11 +154,11 @@ p9 = do
       (_, g3) = diffScan (maDiffProcess 0) [1, 2, 3 :: Double]
   pure $ g1 1 == [1, 1, 1] && g2 [1, 1, 1] == [2, 4, 6] && g3 [1, 1, 1] == [1, 1, 1]
 
--- | P10: circuits-ad agrees with Circuit.Stats.Diff on a quadratic.
+-- | P10: a differentiable scan agrees with 'quadD' on a quadratic.
 --
--- The shared computation is @f(x) = 2x^2 + 3x + 5@ at @x = 1@.  Both the
--- 'Circuit.Stats.Diff' scan (over a single input) and @circuits-ad@'s 'quadD'
--- should produce value 10 and gradient 7.
+-- The shared computation is @f(x) = 2x^2 + 3x + 5@ at @x = 1@. Both the
+-- 'Circuit.Stats.Diff' scan over a single input and 'quadD' from
+-- @circuits-diff@ produce value 10 and gradient 7.
 p10 :: IO Bool
 p10 = do
   let constD :: Double -> Diff' (GradInputs Double) Double

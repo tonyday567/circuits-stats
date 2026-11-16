@@ -1,43 +1,40 @@
 # circuits-stats
 
-A `Process` is a triple of functions:
+`circuits-stats` provides streaming statistics as Moore machines. The
+constructors return `Circuit.Machine.MooreT` values from `circuits`, with the
+machine's state type hidden behind the `MooreT` wrapper.
 
-- `(a -> s)` **inject**: convert an input into the initial state.
+`Circuit.Machine.moore` builds a machine from three functions:
+
+- `(a -> s)` **init**: convert the first input into the initial state.
 - `(s -> a -> s)` **step**: update state given prior state and new input.
 - `(s -> b)` **extract**: convert state to output.
 
-A sum, for example, looks like `M id (+) id` where the first `id` is the
-initial injection and the second `id` is the covariant extraction.
-
-This library provides support for computing statistics (such as an average or
-a standard deviation) as current state within a process context. The carrier
-type now lives in `circuits` as `Circuit.Process.Process`; this package is the
-statistical interpretation built on top of it.
+A sum, for example, is `moore id (+) id`: the first input initializes the
+sum, subsequent inputs extend it, and the current sum is the output.
 
 ## Circuits ecosystem relationship
 
-`circuits-stats` is a client of the `circuits` ecosystem:
+`circuits-stats` is a client of two packages:
 
-- The state-machine arrow is `Circuit.Process.Process` from `circuits`.
-- Reverse-mode gradients share the same `NumHask.Diff.Diff` primitive arrow
-  that `circuits-ad` builds on; `Circuit.Stats.Diff` is verified against
-  `circuits-ad` in the `circuits-stats-axioma` oracle suite (P10).
-- Scalar self-actions for `Double` (used by the ODE integrators) now live in
-  `numhask`, removing the orphan instances that previously lived in
-  `Circuit.Stats.ODE`.
+- `Circuit.Machine` from `circuits` supplies the state-machine representation
+  and its runners.
+- `Circuit.Diff` from `circuits-diff` supplies the `Diff` carrier used by
+  `Circuit.Stats.Diff` for reverse-mode gradients through scans and folds.
+
+The scalar actions used by `Circuit.Stats.ODE` come from
+`NumHask.Algebra.Action` in `numhask`.
 
 The statistical implementations (`online`, `ma`, `sqma`, `std`, `cov`,
-`reg`, quantiles, etc.) remain the canonical `circuits-stats` reference
-implementations.
+`reg`, quantiles, etc.) are the `circuits-stats` reference implementations.
 
-## Naming note
+## Moore machines
 
-In the strict automata-theory sense, the type here is a **Moore machine**: the
-output depends only on the current state, not on the current input. A
-categorical machine with input-dependent output would have type
-(`s -> a -> b`). The library keeps the streaming, input-driven transition
-`step :: s -> a -> s`, but the carrier is now the polymorphic `Process` arrow
-from `circuits`.
+The output of a Moore machine depends on its current state. Each input first
+updates the state through `step :: s -> a -> s`; `extract :: s -> b` then
+reads the output. The statistical constructors use
+`MooreT (,) (->) a b`, so machines with different hidden state types can be
+combined applicatively and run over the same input.
 
 ## Usage
 
@@ -60,9 +57,10 @@ fromMaybe (0/0) $ fold ((,) <$> ma 0.9 <*> std 0.9) [1..100::Double]
 (91.00265621044142,9.472822289121)
 ```
 
-`fold` is re-exported from `Circuit.Process.fold` and is therefore total:
-it returns `Nothing` for an empty input list and `Just` the final output
-otherwise.
+`Circuit.Stats` re-exports `MooreT`, `moore`, `before`, `scan`, and `fold`
+from `Circuit.Machine` as a convenience surface for statistical machines.
+`scan` returns one output per input. `fold` returns `Nothing` for an empty
+input list and `Just` the final output otherwise.
 
 ## Decay ⟜ what the decay rate is
 
@@ -105,18 +103,22 @@ descent against any downstream loss. That makes the two-timescale shape
 explicit — fast statistics inside the scan, a slowly-learned decay
 outside it.
 
-## Backport notes
+## Differentiation and verification
 
-- `fold` is now the total `Circuit.Process.fold`.
-- `Circuit.Stats.ODE` no longer contains orphan `MultiplicativeAction Double`
-  / `DivisiveAction Double` instances; they have moved upstream to
-  `NumHask.Algebra.Action`.
-- `Circuit.Stats.Diff` keeps its stable API. The high-level runners
-  (`gradScan`, `gradFold`) already use `NumHask.Diff` directly; the
-  lower-level `DiffProcess` / `DiffSystem` capture-and-replay machinery is
-  retained because it does not have a direct, API-preserving translation to
-  `circuits-ad`'s `Net`-based `linearizeAt` / `backprop`. The oracle suite
-  guards the current behaviour and cross-checks it against `circuits-ad`.
+`Circuit.Stats.Diff` runs Moore machines with the `Circuit.Diff.Diff` carrier:
+
+- `gradScan` and `gradFold` return pullbacks with respect to the input list.
+- `netScan` and `netFold` return pullbacks with respect to external
+  parameters.
+- `DiffProcess` packages differentiable initialization, state transitions, and
+  output functions. `DiffSystem` packages the transition and output functions
+  with state supplied externally. Their scan runners capture intermediate
+  states and step pullbacks on the forward pass, then replay them in reverse.
+
+The `circuits-stats-axioma` executable checks these interfaces. P9 compares
+gradient runners with hand-derived references; P10 compares a single-input
+scan with `Circuit.Diff.Circuit.quadD` from `circuits-diff` on the quadratic
+`f(x) = 2x² + 3x + 5`.
 
 ## Reference
 

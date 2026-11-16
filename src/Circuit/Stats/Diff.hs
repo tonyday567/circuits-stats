@@ -2,22 +2,21 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wno-pattern-namespace-specifier #-}
 
--- | Reverse-mode AD through a 'Moore' scan.
+-- | Reverse-mode automatic differentiation through 'MooreT' scans and folds.
 --
--- The idea is to run the mealy with 'Circuit.Diff.Diff' as the carrier.  Each
--- input element becomes a variable over the whole input list, so the final
--- output (or every scan output) carries a pullback wrt every input.
+-- A machine whose values use 'Circuit.Diff.Diff' as their carrier records the
+-- computation through every state transition. 'gradFold' returns the final
+-- output and a pullback with respect to the input list; 'gradScan' returns
+-- every intermediate output and the corresponding tape pullback. 'netFold'
+-- and 'netScan' instead return pullbacks with respect to external parameters.
 --
--- The high-level gradient runners 'gradScan' and 'gradFold' are the canonical
--- entry points.  They already use 'Circuit.Diff' directly, which is the same
--- primitive arrow that @circuits-diff@ builds on.  The lower-level
--- 'DiffProcess' / 'DiffSystem' reverse-step machinery is kept because its
--- explicit-state API (capture states and step pullbacks during the forward
--- pass, then replay them backward) does not have a direct, API-preserving
--- translation to @circuits-diff@'s 'Circuit.Diff.Backprop.linearizeAt' /
--- 'Circuit.Diff.Backprop.backprop'.  Where a direct @circuits-diff@
--- replacement is possible in the future, the oracles in @test/Oracle.hs@
--- provide regression guards.
+-- 'DiffProcess' and 'DiffSystem' expose differentiable state-machine legs
+-- directly. Their runners capture intermediate states and step pullbacks on
+-- the forward pass, then replay them in reverse.
+--
+-- P9 and P10 in @app/axioma.hs@ check the gradient runners against
+-- hand-derived references and a shared quadratic computation in
+-- @circuits-diff@.
 module Circuit.Stats.Diff
   ( -- * Gradient inputs
     GradInputs (..),
@@ -127,7 +126,7 @@ variables xs =
   let n = length xs
    in [variable n i | i <- [0 .. n - 1]]
 
--- | Fold a list through a differentiable mealy and return the final output
+-- | Fold a list through a differentiable Moore machine and return the final output
 -- together with a pullback through the entire fold.
 --
 -- >>> let m = PS.asum :: PS.MooreT (,) (->) (Diff' (GradInputs Double) Double) (Diff' (GradInputs Double) Double); (y, g) = gradFold m [1,2,3] in (y, g 1)
@@ -145,7 +144,7 @@ gradFold m xs =
       let (y, pb) = runDiff ydiff (GradInputs (HA.array [length xs] xs))
        in (y, HA.arrayAs . unGradInputs . pb)
 
--- | Scan a list through a differentiable mealy and return the per-step
+-- | Scan a list through a differentiable Moore machine and return the per-step
 -- outputs together with a pullback that maps a list of output cotangents
 -- (one per step) to input cotangents.
 --
@@ -167,13 +166,13 @@ gradScan m xs =
           foldl' (+) z [pb db | (pb, db) <- zip (snd <$> pbs) dbs]
    in (fst <$> pbs, pullback)
 
--- | Lift a plain input value into the parameter space of a network mealy.
+-- | Lift a plain input value into the parameter space of a network Moore machine.
 --
 -- The value is treated as a constant: its pullback is always zero.
 constant :: (Additive p) => a -> Diff tag p a
 constant x = Diff (const (x, const zero))
 
--- | Fold a network mealy and return the final output together with a pullback
+-- | Fold a network Moore machine and return the final output together with a pullback
 -- through the parameters.
 netFold ::
   (Additive p) =>
@@ -187,7 +186,7 @@ netFold m p xs =
     Nothing -> error "netFold: empty fold"
     Just ydiff -> runDiff ydiff p
 
--- | Scan a network mealy and return the per-step outputs together with a
+-- | Scan a network Moore machine and return the per-step outputs together with a
 -- pullback that maps output cotangents to parameter cotangents.
 netScan ::
   (Additive p) =>
@@ -206,7 +205,7 @@ netScan m p xs =
 -- | 'Circuit.Stats.online' with a 'Diff' carrier.
 --
 -- The inject and step functions now operate on differentiable values, so the
--- resulting mealy can be placed inside 'netFold' / 'netScan' and the
+-- resulting Moore machine can be placed inside 'netFold' / 'netScan' and the
 -- parameters inside the carrier are learned by ordinary reverse-mode AD.
 onlineDiff ::
   (Additive p, Subtractive b, Divisive b) =>
@@ -240,45 +239,35 @@ stdDiff = std
 -- Reverse-step Moore
 -- ---------------------------------------------------------------------------
 
--- TODO: The 'DiffProcess' / 'DiffSystem' API below is kept because its
--- explicit-state, capture-and-replay semantics do not map directly onto
--- @circuits-ad@'s 'Net'-based 'linearizeAt' while preserving the same
--- types.  A future slice could either (a) provide a 'DiffProcess'-to-'Net'
--- compiler, or (b) deprecate this API in favour of 'gradScan' / 'gradFold'
--- plus direct @circuits-ad@ 'Circuit.Net' construction.  The oracle suite
--- guards the current behaviour.
-
--- | A 'Moore' machine with explicit state and differentiable
--- inject / step / extract functions.
+-- | Differentiable initialization, transition, and extraction functions for a
+-- Moore machine.
 --
 -- The pullbacks are captured during the forward pass and then replayed by a
 -- single backward walk, so the cost of a scan gradient is linear in the input
--- length (no closure-chain blow-up).
+-- length.
 data DiffProcess s a b = DiffProcess
   { dInject :: Diff' a s,
     dStep :: Diff' (s, a) s,
     dExtract :: Diff' s b
   }
 
--- | A 'System'-packaged differentiable Moore machine: state is external.
---
--- Same dynamics as 'DiffProcess', without @inject@.  Matches
--- @System s (Mono i o)@ packaging (@i@ = output, @o@ = input):
+-- | Differentiable transition and extraction functions with externally
+-- supplied state.
 --
 -- @
 -- dsExtract :: Diff' s i     -- output from state
 -- dsStep    :: Diff' (s, o) s  -- next state from state and input
 -- @
 --
--- Pair with an initial state via 'diffSystemAsDiffProcess' to reuse
--- 'diffScan' \/ 'diffFold'.  Agents that are 'System's sit here for Diff
--- without pretending to be 'Moore' first.
+-- Supply an initial state with 'diffSystemAsDiffProcess' to run the machine
+-- using 'diffScan' or 'diffFold'.
 data DiffSystem s i o = DiffSystem
   { dsExtract :: Diff' s i,
     dsStep :: Diff' (s, o) s
   }
 
--- | Bake in @s0@: inject is one step from that state (same as 'systemAsProcess').
+-- | Supply an initial state; the first input drives the first transition from
+-- that state.
 --
 -- @
 -- diffSystemAsDiffProcess sys s0 :: DiffProcess s o i
