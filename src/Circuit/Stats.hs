@@ -65,9 +65,8 @@ module Circuit.Stats
 where
 
 import Circuit.Category (id, (.))
-import Circuit.Machine (Body (..), MooreT (..), before, fold, moore, scan)
+import Circuit.Machine (Moore (Moore), MooreT (..), before, fold, moore, scan)
 import Circuit.Mat.Field (inverseM)
-import Circuit.Tensor (unConst)
 import Control.Applicative (liftA2, liftA3)
 import Control.Exception
 import Data.Map qualified as Map
@@ -408,11 +407,11 @@ alpha r =
 {-# INLINEABLE alpha #-}
 
 arrayify :: (S.KnownNats s) => MooreT (,) (->) a b -> MooreT (,) (->) (F.Array Vector s a) (F.Array Vector s b)
-arrayify (MooreT (Body sInject sStep sEmit)) = moore inject step extract
+arrayify (MooreT (Moore sInject sStep sEmit)) = moore inject step extract
   where
     inject = fmap sInject
     step = F.zipWith (curry sStep)
-    extract = fmap (unConst . sEmit)
+    extract = fmap sEmit
 
 -- | multiple regression
 --
